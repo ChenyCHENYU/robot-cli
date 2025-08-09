@@ -16,7 +16,7 @@
 
 ### 安装
 ```bash
-npm install -g @cheny/robot-cli
+npm install -g @agile-team/robot-cli
 ```
 
 ### 创建项目
@@ -398,7 +398,7 @@ analytics.track('template_used', {
 ## 🔧 常见问题
 
 **Q: 提示 "command not found"？**  
-A: 全局安装CLI：`npm install -g @cheny/robot-cli`
+A: 全局安装CLI：`npm install -g @agile-team/robot-cli`
 
 **Q: 模板下载失败？**  
 A: 检查网络连接，尝试清除缓存：`robot cache --clear`
@@ -413,7 +413,7 @@ A: 目前仅支持公开GitHub仓库
 
 ```bash
 # 安装并创建项目
-npm install -g @cheny/robot-cli
+npm install -g @agile-team/robot-cli
 robot create my-awesome-project
 
 # 启动开发服务器
@@ -431,7 +431,7 @@ MIT License
 ## 🔗 相关链接
 
 - [GitHub仓库](https://github.com/ChenyCHENYU/robot-cli)
-- [npm包](https://www.npmjs.com/package/@cheny/robot-cli)  
+- [npm包](https://www.npmjs.com/package/@agile-team/robot-cli)  
 - [问题反馈](https://github.com/ChenyCHENYU/robot-cli/issues)
 
 ---
@@ -439,5 +439,5 @@ MIT License
 **让项目创建变得简单高效，专注于业务逻辑的实现！** 🚀
 
 ```bash
-npx @cheny/robot-cli create my-project
+npx @agile-team/robot-cli create my-project
 ```
