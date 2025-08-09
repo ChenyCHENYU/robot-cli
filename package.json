@@ -1,6 +1,6 @@
 {
   "name": "@cheny/robot-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "🤖 现代化项目脚手架工具，支持多技术栈快速创建项目",
   "type": "module",
   "bin": {
@@ -29,7 +29,7 @@
     "reinstall": "npm run clean:modules && npm run install:deps",
     "prepublishOnly": "npm run test && npm run lint",
     "version:patch": "npm version patch",
-    "version:minor": "npm version minor", 
+    "version:minor": "npm version minor",
     "version:major": "npm version major",
     "publish:npm": "npm publish --access public",
     "release:patch": "npm run version:patch && npm run publish:npm",
