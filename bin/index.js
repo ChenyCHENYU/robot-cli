@@ -159,7 +159,7 @@ async function main() {
       
       const titleBox = boxen(
         logo + '\n\n' +
-        '      🤖 Robot 项目脚手架工具  v1.0.3\n' +
+        '      🤖 Robot 项目脚手架工具  v1.0.4\n' +
         '         兼容 npm/yarn/pnpm/bun',
         {
           padding: { top: 1, bottom: 1, left: 2, right: 2 },
@@ -233,7 +233,7 @@ async function main() {
     program
       .name('robot')
       .description('🤖 Robot 项目脚手架工具 - @agile-team/robot-cli')
-      .version('1.0.3')
+      .version('1.0.4')
       .hook('preAction', () => {
         showWelcome();
       });
