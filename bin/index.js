@@ -14,7 +14,6 @@ const __dirname = dirname(__filename);
  */
 function getPackageVersion() {
   try {
-    // 尝试从多个位置读取 package.json
     const possiblePaths = [
       join(__dirname, '..', 'package.json'),
       join(__dirname, 'package.json'),
@@ -28,49 +27,34 @@ function getPackageVersion() {
       }
     }
     
-    return '1.0.0'; // 默认版本
+    return '1.0.0';
   } catch (error) {
-    return '1.0.0'; // 出错时返回默认版本
+    return '1.0.0';
   }
 }
 
-// 获取版本号
 const PACKAGE_VERSION = getPackageVersion();
 
 /**
- * 智能路径解析 - 兼容不同包管理器的安装路径
+ * 智能路径解析
  */
 function resolveLibPath() {
-  // 可能的 lib 目录路径
   const possiblePaths = [
-    // 1. 标准相对路径 (开发环境 + 大多数情况)
     join(__dirname, '..', 'lib'),
-    
-    // 2. 同级目录 (某些链接情况)
     join(__dirname, 'lib'),
-    
-    // 3. 向上查找 (深度嵌套情况)
     join(__dirname, '..', '..', 'lib'),
-    
-    // 4. 从 node_modules 查找 (npm/yarn)
     join(__dirname, '..', 'node_modules', '@agile-team', 'robot-cli', 'lib'),
-    
-    // 5. 全局安装的各种可能路径
     resolve(__dirname, '..', 'lib'),
     resolve(__dirname, '../../lib'),
-    
-    // 6. bun 特殊路径处理
     join(__dirname, '..', '..', '@agile-team', 'robot-cli', 'lib'),
   ];
 
-  // 查找第一个存在的路径
   for (const libPath of possiblePaths) {
     if (existsSync(libPath)) {
       return libPath;
     }
   }
 
-  // 如果都找不到，抛出详细错误
   throw new Error(`
 无法找到 lib 目录，已尝试以下路径:
 ${possiblePaths.map(p => `  - ${p}`).join('\n')}
@@ -85,25 +69,21 @@ ${possiblePaths.map(p => `  - ${p}`).join('\n')}
   `);
 }
 
-// 动态导入所需模块
+// 动态导入所需模块 - 移除缓存相关模块
 async function loadModules() {
   try {
     const libPath = resolveLibPath();
     
-    // 将路径转换为 file:// URL 格式（Windows 兼容）
     const createUrl = pathToFileURL(join(libPath, 'create.js')).href;
-    const cacheUrl = pathToFileURL(join(libPath, 'cache.js')).href;
     const templatesUrl = pathToFileURL(join(libPath, 'templates.js')).href;
     const utilsUrl = pathToFileURL(join(libPath, 'utils.js')).href;
     
-    // 动态导入所有需要的模块
     const [
       { Command },
       chalk,
       boxen,
       inquirer,
       { createProject },
-      { clearCache, getCacheInfo, formatSize },
       { getAllTemplates, searchTemplates, getRecommendedTemplates },
       { checkNetworkConnection }
     ] = await Promise.all([
@@ -112,7 +92,6 @@ async function loadModules() {
       import('boxen'),
       import('inquirer'),
       import(createUrl),
-      import(cacheUrl),
       import(templatesUrl),
       import(utilsUrl)
     ]);
@@ -123,9 +102,6 @@ async function loadModules() {
       boxen: boxen.default,
       inquirer: inquirer.default,
       createProject,
-      clearCache,
-      getCacheInfo,
-      formatSize,
       getAllTemplates,
       searchTemplates,
       getRecommendedTemplates,
@@ -160,9 +136,6 @@ async function main() {
       boxen, 
       inquirer,
       createProject,
-      clearCache,
-      getCacheInfo,
-      formatSize,
       getAllTemplates,
       searchTemplates,
       getRecommendedTemplates,
@@ -203,20 +176,18 @@ async function main() {
       console.log();
     }
 
-    // 显示主菜单
+    // 显示主菜单 - 移除缓存信息
     async function showMainMenu() {
       const title = chalk.white.bold('🚀 快速开始');
       
       console.log('  ' + title);
       console.log();
       
-      // 获取统计信息
       const allTemplates = getAllTemplates();
       const templateCount = Object.keys(allTemplates).length;
-      const cacheInfo = await getCacheInfo();
       
       console.log(chalk.dim(`  📦 可用模板: ${templateCount} 个`));
-      console.log(chalk.dim(`  💾 缓存模板: ${cacheInfo.templates.length} 个 (${formatSize(cacheInfo.size)})`));
+      console.log(chalk.dim(`  🌐 总是下载最新版本`));
       console.log();
       
       const commands = [
@@ -239,11 +210,6 @@ async function main() {
           cmd: 'robot search <keyword>',
           desc: '搜索模板',
           color: 'magenta'
-        },
-        {
-          cmd: 'robot cache',
-          desc: '缓存管理',
-          color: 'yellow'
         }
       ];
       
@@ -262,29 +228,26 @@ async function main() {
     program
       .name('robot')
       .description('🤖 Robot 项目脚手架工具 - @agile-team/robot-cli')
-      .version(PACKAGE_VERSION) // 🎯 使用动态版本号
+      .version(PACKAGE_VERSION)
       .hook('preAction', () => {
         showWelcome();
       });
 
-    // 创建项目命令
+    // 创建项目命令 - 移除缓存相关选项
     program
       .command('create [project-name]')
       .description('创建新项目')
       .option('-t, --template <template>', '指定模板类型')
-      .option('--no-cache', '强制重新下载模板')
       .option('--skip-install', '跳过依赖安装')
       .action(async (projectName, options) => {
         try {
           // 检查网络连接
-          if (!options.cache) {
-            console.log(chalk.blue('🌐 检查网络连接...'));
-            const hasNetwork = await checkNetworkConnection();
-            if (!hasNetwork) {
-              console.log(chalk.red('❌ 网络连接失败，无法下载模板'));
-              console.log(chalk.yellow('💡 请检查网络连接后重试'));
-              process.exit(1);
-            }
+          console.log(chalk.blue('🌐 检查网络连接...'));
+          const hasNetwork = await checkNetworkConnection();
+          if (!hasNetwork) {
+            console.log(chalk.red('❌ 网络连接失败，无法下载模板'));
+            console.log(chalk.yellow('💡 请检查网络连接后重试'));
+            process.exit(1);
           }
           
           await createProject(projectName, options);
@@ -292,7 +255,6 @@ async function main() {
           console.log();
           console.log(chalk.red('✗'), chalk.red.bold('创建失败'));
           
-          // 根据错误类型提供不同的建议
           if (error.message.includes('网络')) {
             console.log('  ' + chalk.dim('网络相关问题，请检查网络连接'));
           } else if (error.message.includes('权限')) {
@@ -337,7 +299,6 @@ async function main() {
           // 按分类显示
           const categories = {};
           Object.entries(templates).forEach(([key, template]) => {
-            // 简单分类逻辑，根据模板名称前缀
             const category = key.split('-')[0];
             if (!categories[category]) {
               categories[category] = [];
@@ -391,81 +352,6 @@ async function main() {
           }
         } catch (error) {
           console.log(chalk.red('❌ 搜索失败:'), error.message);
-        }
-      });
-
-    // 缓存管理
-    program
-      .command('cache')
-      .description('缓存管理')
-      .option('-c, --clear', '清除所有缓存')
-      .option('-i, --info', '显示缓存信息')
-      .action(async (options) => {
-        try {
-          if (options.clear) {
-            const { confirmed } = await inquirer.prompt([
-              {
-                type: 'confirm',
-                name: 'confirmed',
-                message: '确认清除所有模板缓存?',
-                default: false
-              }
-            ]);
-            
-            if (confirmed) {
-              await clearCache();
-              console.log();
-              console.log(chalk.green('✓'), chalk.green.bold('缓存清除成功'));
-            } else {
-              console.log(chalk.yellow('❌ 取消清除'));
-            }
-          } else {
-            // 显示缓存信息
-            const cacheInfo = await getCacheInfo();
-            
-            console.log();
-            console.log(chalk.blue('💾 缓存信息:'));
-            console.log();
-            
-            if (!cacheInfo.exists || cacheInfo.templates.length === 0) {
-              console.log(chalk.dim('  暂无缓存模板'));
-            } else {
-              console.log(`  缓存目录: ${chalk.dim(cacheInfo.path)}`);
-              console.log(`  模板数量: ${chalk.cyan(cacheInfo.templates.length)} 个`);
-              console.log(`  总大小: ${chalk.cyan(formatSize(cacheInfo.size))}`);
-              console.log();
-              console.log(chalk.blue('  缓存的模板:'));
-              
-              cacheInfo.templates.forEach(template => {
-                const modifiedTime = template.modifiedTime.toLocaleDateString();
-                console.log(`    ${chalk.green('●')} ${template.name}`);
-                console.log(`      大小: ${formatSize(template.size)}  更新: ${modifiedTime}`);
-              });
-            }
-            
-            console.log();
-            console.log(chalk.dim('  使用 robot cache --clear 清除缓存'));
-          }
-        } catch (error) {
-          console.log(chalk.red('❌ 缓存操作失败:'), error.message);
-        }
-      });
-
-    // 清除缓存命令 (向后兼容)
-    program
-      .command('clear-cache')
-      .description('清除模板缓存')
-      .action(async () => {
-        try {
-          await clearCache();
-          console.log();
-          console.log(chalk.green('✓'), chalk.green.bold('缓存清除成功'));
-          console.log();
-        } catch (error) {
-          console.log();
-          console.log(chalk.red('✗'), chalk.red.bold('清除缓存失败'));
-          console.log('  ' + chalk.dim(error.message));
-          console.log();
         }
       });
 

@@ -2,7 +2,6 @@
 
 import fs from 'fs-extra';
 import path from 'path';
-import os from 'os';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { fileURLToPath } from 'url';
@@ -10,10 +9,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 测试模板数据 - 统一Robot命名风格
+// 测试模板数据 - 用于创建本地演示项目
 const TEST_TEMPLATES = {
   'robot-admin': {
     name: 'Robot Admin 完整版',
+    description: 'Vue3 + Element Plus + 完整功能',
     files: {
       'package.json': {
         "name": "robot-admin-template",
@@ -149,131 +149,12 @@ bun run dev
 # 构建生产版本
 bun run build
 \`\`\`
-
-## 仓库地址
-
-https://github.com/ChenyCHENYU/Robot_Admin
-`
-    }
-  },
-  'robot-admin-base': {
-    name: 'Robot Admin 精简版',
-    files: {
-      'package.json': {
-        "name": "robot-admin-base",
-        "version": "1.0.0",
-        "description": "Robot 后台管理系统精简版",
-        "scripts": {
-          "dev": "vite",
-          "build": "vite build"
-        },
-        "dependencies": {
-          "vue": "^3.4.0",
-          "vue-router": "^4.2.0",
-          "pinia": "^2.1.0",
-          "element-plus": "^2.4.0"
-        },
-        "devDependencies": {
-          "vite": "^5.0.0",
-          "@vitejs/plugin-vue": "^4.5.0"
-        }
-      },
-      'src/main.js': `import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router'
-import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-
-const app = createApp(App)
-app.use(router)
-app.use(createPinia())
-app.use(ElementPlus)
-app.mount('#app')`,
-      'src/App.vue': `<template>
-  <div id="app">
-    <h1>⚡ Robot 后台管理系统精简版</h1>
-    <p>轻量级Robot后台管理模板</p>
-    <router-view />
-  </div>
-</template>
-
-<script setup>
-// Vue3 Composition API
-</script>`,
-      'vite.config.js': `import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-
-export default defineConfig({
-  plugins: [vue()]
-})`,
-      '_gitignore': `node_modules
-dist
-.DS_Store`,
-      'README.md': `# Robot后台管理系统精简版
-
-轻量级Robot后台管理模板
-
-## 快速开始
-
-\`\`\`bash
-bun install
-bun run dev
-\`\`\`
-
-## 仓库地址
-
-https://github.com/ChenyCHENYU/Robot_Admin_Base
-`
-    }
-  },
-  'robot-uniapp': {
-    name: 'Robot uni-app 完整版',
-    files: {
-      'package.json': {
-        "name": "robot-uniapp",
-        "version": "1.0.0",
-        "description": "Robot uni-app 跨平台应用",
-        "scripts": {
-          "dev:h5": "uni build --watch --target h5",
-          "dev:mp-weixin": "uni build --watch --target mp-weixin",
-          "build:h5": "uni build --target h5",
-          "build:mp-weixin": "uni build --target mp-weixin"
-        },
-        "dependencies": {
-          "vue": "^3.4.0",
-          "@dcloudio/uni-app": "^3.0.0"
-        }
-      },
-      'src/App.vue': `<template>
-  <div id="app">
-    <h1>🚀 Robot uni-app 跨平台应用</h1>
-    <p>一套代码，多端运行</p>
-  </div>
-</template>
-
-<script setup>
-// uni-app 主应用
-</script>`,
-      'README.md': `# Robot uni-app 跨平台应用
-
-基于uni-app框架的跨平台移动应用
-
-## 支持平台
-
-- H5
-- 微信小程序
-- Android
-- iOS
-
-## 仓库地址
-
-https://github.com/ChenyCHENYU/Robot_Uniapp
 `
     }
   },
   'robot-nest': {
     name: 'Robot NestJS 完整版',
+    description: 'NestJS + TypeORM + 企业级后端',
     files: {
       'package.json': {
         "name": "robot-nest",
@@ -320,59 +201,72 @@ export class AppModule {}`,
 - TypeORM数据库
 - JWT认证
 - Swagger文档
-
-## 仓库地址
-
-https://github.com/ChenyCHENYU/Robot_Nest
 `
     }
   },
-  'robot-electron': {
-    name: 'Robot Electron 完整版',
+  'robot-react': {
+    name: 'Robot React 完整版',
+    description: 'React + Ant Design + 完整功能',
     files: {
       'package.json': {
-        "name": "robot-electron",
+        "name": "robot-react",
         "version": "1.0.0",
-        "description": "Robot Electron 跨平台桌面应用",
-        "main": "dist/main.js",
+        "description": "Robot React 管理系统",
         "scripts": {
-          "electron:dev": "concurrently \"npm run dev\" \"electron .\"",
-          "electron:build": "electron-builder",
-          "dev": "vite"
+          "start": "vite",
+          "build": "vite build"
         },
         "dependencies": {
-          "electron": "^28.0.0",
-          "vue": "^3.4.0"
+          "react": "^18.2.0",
+          "react-dom": "^18.2.0",
+          "react-router-dom": "^6.8.0",
+          "antd": "^5.12.0"
+        },
+        "devDependencies": {
+          "vite": "^5.0.0",
+          "@vitejs/plugin-react": "^4.2.0"
         }
       },
-      'src/main/main.ts': `import { app, BrowserWindow } from 'electron';
+      'src/main.tsx': `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: true
-    }
-  });
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)`,
+      'src/App.tsx': `import React from 'react'
+import { Layout, Button } from 'antd'
 
-  win.loadURL('http://localhost:3000');
+const { Header, Content } = Layout
+
+function App() {
+  return (
+    <Layout>
+      <Header style={{ background: '#fff' }}>
+        <h1>🤖 Robot React 管理系统</h1>
+      </Header>
+      <Content style={{ padding: '20px' }}>
+        <p>基于Robot CLI创建的React项目</p>
+        <Button type="primary">开始使用</Button>
+      </Content>
+    </Layout>
+  )
 }
 
-app.whenReady().then(createWindow);`,
-      'README.md': `# Robot Electron 跨平台桌面应用
+export default App`,
+      'README.md': `# Robot React 管理系统
 
-基于Electron + Vue3的跨平台桌面应用
+基于Robot CLI创建的React项目
 
-## 支持平台
+## 功能特性
 
-- Windows
-- macOS  
-- Linux
-
-## 仓库地址
-
-https://github.com/ChenyCHENYU/Robot_Electron
+- React 18
+- Ant Design
+- React Router
+- Vite
 `
     }
   }
@@ -387,23 +281,19 @@ async function setupTestEnvironment() {
       name: 'setupType',
       message: '请选择测试环境设置:',
       choices: [
-        { name: '🚀 创建完整测试环境 (推荐)', value: 'full' },
-        { name: '📁 仅创建模板缓存', value: 'templates' },
-        { name: '🎯 创建示例项目', value: 'demo' },
+        { name: '🎯 创建演示项目 (测试项目结构)', value: 'demo' },
+        { name: '📋 显示可用模板 (测试模板配置)', value: 'templates' },
         { name: '🧹 清除测试环境', value: 'clean' }
       ]
     }
   ]);
 
   switch (setupType) {
-    case 'full':
-      await createFullTestEnvironment();
+    case 'demo':
+      await createDemoProjects();
       break;
     case 'templates':
-      await createTestTemplates();
-      break;
-    case 'demo':
-      await createDemoProject();
+      await showAvailableTemplates();
       break;
     case 'clean':
       await cleanTestEnvironment();
@@ -411,43 +301,40 @@ async function setupTestEnvironment() {
   }
 }
 
-async function createFullTestEnvironment() {
-  const testDir = path.join(process.cwd(), 'test-env');
-  
-  console.log(chalk.green('📁 创建测试目录...'));
+async function createDemoProjects() {
+  const testDir = path.join(process.cwd(), 'test-env', 'demo-projects');
   await fs.ensureDir(testDir);
   
-  // 创建模拟的缓存目录和模板
-  await createTestTemplates();
+  console.log(chalk.green('🎯 创建演示项目...\n'));
   
-  // 创建演示项目
-  await createDemoProject();
-  
-  console.log(chalk.green('✅ 测试环境创建完成!\n'));
-  console.log(chalk.blue('测试目录结构:'));
-  console.log(chalk.gray(`${testDir}/`));
-  console.log(chalk.gray(`├── demo-projects/    (演示项目)`));
-  console.log(chalk.gray(`└── ~/.robot-cli/     (模拟缓存)`));
-  console.log();
-  console.log(chalk.yellow('💡 现在你可以运行测试命令:'));
-  console.log(chalk.cyan('   npm run dev:create my-test-project'));
-  console.log(chalk.cyan('   npm run dev:list'));
-  console.log(chalk.cyan('   npm run dev:cache'));
-}
+  const { selectedTemplates } = await inquirer.prompt([
+    {
+      type: 'checkbox',
+      name: 'selectedTemplates',
+      message: '选择要创建的演示项目:',
+      choices: Object.entries(TEST_TEMPLATES).map(([key, template]) => ({
+        name: `${template.name} - ${template.description}`,
+        value: key,
+        checked: key === 'robot-admin' // 默认选中admin
+      }))
+    }
+  ]);
 
-async function createTestTemplates() {
-  const cacheDir = path.join(os.homedir(), '.robot-cli', 'cache');
+  if (selectedTemplates.length === 0) {
+    console.log(chalk.yellow('❌ 未选择任何模板'));
+    return;
+  }
   
-  console.log(chalk.green('💾 创建模拟缓存模板...'));
-  await fs.ensureDir(cacheDir);
-  
-  for (const [templateKey, templateData] of Object.entries(TEST_TEMPLATES)) {
-    const templateDir = path.join(cacheDir, templateKey);
-    await fs.ensureDir(templateDir);
+  for (const templateKey of selectedTemplates) {
+    const templateData = TEST_TEMPLATES[templateKey];
+    const demoProject = path.join(testDir, `${templateKey}-demo`);
+    
+    console.log(chalk.green(`📁 创建 ${templateData.name}...`));
+    await fs.ensureDir(demoProject);
     
     // 创建模板文件
     for (const [filePath, content] of Object.entries(templateData.files)) {
-      const fullPath = path.join(templateDir, filePath);
+      const fullPath = path.join(demoProject, filePath);
       await fs.ensureDir(path.dirname(fullPath));
       
       if (typeof content === 'object') {
@@ -457,125 +344,87 @@ async function createTestTemplates() {
       }
     }
     
-    console.log(chalk.gray(`  ✓ ${templateData.name} (${templateKey})`));
+    console.log(chalk.gray(`  ✓ 项目位置: ${path.relative(process.cwd(), demoProject)}`));
   }
   
-  console.log(chalk.green('\n✅ 模拟模板创建完成!'));
-  console.log(chalk.blue(`缓存位置: ${cacheDir}`));
-  console.log(chalk.dim(`包含 ${Object.keys(TEST_TEMPLATES).length} 个测试模板`));
+  console.log(chalk.green('\n✅ 演示项目创建完成!'));
   console.log();
-  console.log(chalk.yellow('📋 可用的测试模板:'));
-  Object.entries(TEST_TEMPLATES).forEach(([key, template]) => {
-    console.log(chalk.cyan(`  • ${key} - ${template.name}`));
+  console.log(chalk.yellow('💡 你可以进入演示项目测试:'));
+  selectedTemplates.forEach(templateKey => {
+    const demoPath = path.relative(process.cwd(), path.join(testDir, `${templateKey}-demo`));
+    console.log(chalk.cyan(`   cd ${demoPath}`));
+    console.log(chalk.cyan('   bun install && bun run dev'));
+    console.log();
   });
 }
 
-async function createDemoProject() {
-  const testDir = path.join(process.cwd(), 'test-env', 'demo-projects');
-  await fs.ensureDir(testDir);
+async function showAvailableTemplates() {
+  console.log(chalk.blue('📋 Robot CLI 可用模板列表\n'));
   
-  console.log(chalk.green('🎯 创建演示项目...'));
+  console.log(chalk.green('内置测试模板:'));
+  Object.entries(TEST_TEMPLATES).forEach(([key, template]) => {
+    console.log(`  ${chalk.cyan('●')} ${chalk.bold(template.name)}`);
+    console.log(`    ${chalk.dim('key: ' + key)}`);
+    console.log(`    ${chalk.dim('描述: ' + template.description)}`);
+    console.log(`    ${chalk.dim('文件数: ' + Object.keys(template.files).length + ' 个')}`);
+    console.log();
+  });
   
-  // 创建一个Robot管理后台的演示项目
-  const demoProject = path.join(testDir, 'robot-admin-demo');
-  await fs.ensureDir(demoProject);
-  
-  const templateData = TEST_TEMPLATES['robot-admin'];
-  for (const [filePath, content] of Object.entries(templateData.files)) {
-    const fullPath = path.join(demoProject, filePath);
-    await fs.ensureDir(path.dirname(fullPath));
-    
-    if (typeof content === 'object') {
-      await fs.writeJson(fullPath, content, { spaces: 2 });
-    } else {
-      await fs.writeFile(fullPath, content);
-    }
-  }
-  
-  console.log(chalk.green('✅ 演示项目创建完成!'));
-  console.log(chalk.blue(`项目位置: ${demoProject}`));
+  console.log(chalk.blue('💡 这些模板用于本地测试，实际使用时会从GitHub下载最新版本'));
   console.log();
-  console.log(chalk.yellow('💡 你可以进入演示项目测试:'));
-  console.log(chalk.cyan(`   cd ${path.relative(process.cwd(), demoProject)}`));
-  console.log(chalk.cyan('   bun install'));
-  console.log(chalk.cyan('   bun run dev'));
+  console.log(chalk.yellow('🚀 测试命令:'));
+  console.log(chalk.cyan('   npm run dev:create my-test-project'));
+  console.log(chalk.cyan('   npm run dev:list'));
+  console.log(chalk.cyan('   npm run dev:search robot'));
+  console.log();
 }
 
 async function cleanTestEnvironment() {
   const testDir = path.join(process.cwd(), 'test-env');
-  const cacheDir = path.join(os.homedir(), '.robot-cli');
   
   console.log(chalk.yellow('🧹 清除测试环境...'));
   
   if (fs.existsSync(testDir)) {
     await fs.remove(testDir);
     console.log(chalk.gray('  ✓ 删除测试目录'));
-  }
-  
-  if (fs.existsSync(cacheDir)) {
-    await fs.remove(cacheDir);
-    console.log(chalk.gray('  ✓ 删除缓存目录'));
+  } else {
+    console.log(chalk.gray('  ✓ 测试目录不存在'));
   }
   
   console.log(chalk.green('✅ 测试环境清除完成!'));
 }
 
 async function runQuickTest() {
-  console.log(chalk.blue('🚀 快速测试 Robot CLI 功能\n'));
+  console.log(chalk.blue('🚀 Robot CLI 快速测试指南\n'));
   
-  // 检查缓存
-  const cacheDir = path.join(os.homedir(), '.robot-cli', 'cache');
-  const hasCache = fs.existsSync(cacheDir);
+  console.log(chalk.green('🎯 测试环境说明:'));
+  console.log(chalk.dim('Robot CLI 现在总是下载最新模板，无需缓存管理'));
+  console.log(chalk.dim('测试时可以创建本地演示项目来验证项目结构'));
+  console.log();
   
-  if (!hasCache) {
-    console.log(chalk.yellow('⚠️  没有发现测试缓存'));
-    const { createCache } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'createCache',
-        message: '是否创建测试缓存?',
-        default: true
-      }
-    ]);
-    
-    if (createCache) {
-      await createTestTemplates();
-    } else {
-      console.log(chalk.red('❌ 取消测试'));
-      return;
-    }
-  }
-  
-  // 显示测试状态
-  console.log(chalk.green('🎯 测试环境状态检查...\n'));
-  
-  // 统计缓存模板
-  const cacheItems = await fs.readdir(cacheDir);
-  console.log(chalk.blue('📋 缓存的测试模板:'));
-  
-  Object.entries(TEST_TEMPLATES).forEach(([key, template], index) => {
-    const cached = cacheItems.includes(key);
-    const status = cached ? chalk.green('✓') : chalk.red('✗');
-    console.log(`  ${status} ${template.name}`);
+  console.log(chalk.blue('📋 可测试的模板:'));
+  Object.entries(TEST_TEMPLATES).forEach(([key, template]) => {
+    console.log(`  ${chalk.cyan('●')} ${template.name}`);
     console.log(chalk.dim(`    模板key: ${key}`));
-    console.log(chalk.dim(`    仓库地址: ChenyCHENYU/Robot_${key.split('-')[1] || 'Unknown'}`));
+    console.log(chalk.dim(`    描述: ${template.description}`));
     console.log();
   });
   
   console.log(chalk.green('✅ 测试环境就绪!'));
   console.log();
   console.log(chalk.blue('💡 运行以下命令测试CLI功能:'));
-  console.log(chalk.cyan('   npm run dev:create my-test-project    # 交互式创建'));
+  console.log(chalk.cyan('   npm run dev:create my-test-project    # 交互式创建项目'));
   console.log(chalk.cyan('   npm run dev:list                      # 查看所有模板'));
   console.log(chalk.cyan('   npm run dev:search robot              # 搜索Robot相关模板'));
   console.log(chalk.cyan('   npm run dev:create demo -t robot-admin # 快速创建指定模板'));
-  console.log(chalk.cyan('   npm run dev:cache                     # 查看缓存信息'));
   console.log();
   console.log(chalk.blue('🧪 测试建议:'));
   console.log(chalk.dim('   1. 先运行 npm run dev:list 查看模板列表'));
   console.log(chalk.dim('   2. 运行 npm run dev:create test-project 体验交互流程'));
   console.log(chalk.dim('   3. 运行 npm run dev:search robot 测试搜索功能'));
-  console.log(chalk.dim('   4. 运行 npm run dev:cache 查看缓存状态'));
+  console.log(chalk.dim('   4. 使用 --setup 参数创建本地演示项目'));
+  console.log();
+  console.log(chalk.yellow('注意: 测试时会从GitHub下载真实模板，确保网络连接正常'));
 }
 
 // 主程序

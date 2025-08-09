@@ -9,7 +9,7 @@
 - **🎯 智能模板分类** - 推荐模板、分类浏览、关键词搜索
 - **⚡ 极速项目创建** - 一条命令创建完整项目架构
 - **📦 现代包管理器** - 优先推荐 bun/pnpm，智能检测最佳选择
-- **🌐 智能缓存机制** - 本地缓存，避免重复下载
+- **🌐 总是最新版本** - 每次创建都下载最新模板，无缓存困扰
 - **🎨 友好用户界面** - 现代化终端交互，清晰进度提示
 
 ## 🚀 快速开始
@@ -70,9 +70,6 @@ robot create my-project --template robot-admin
 
 # 跳过依赖安装
 robot create my-project --skip-install
-
-# 强制重新下载
-robot create my-project --no-cache
 ```
 
 ### 模板管理
@@ -88,15 +85,6 @@ robot search vue
 robot search admin
 ```
 
-### 缓存管理
-```bash
-# 查看缓存信息
-robot cache
-
-# 清除缓存
-robot cache --clear
-```
-
 ## 📦 包管理器优先级
 
 Robot CLI 智能选择最佳包管理器：
@@ -105,6 +93,15 @@ Robot CLI 智能选择最佳包管理器：
 2. **pnpm** 🥈 - 快速安装，节省空间  
 3. **yarn** ⚖️ - 兼容现有项目
 4. **npm** ⚖️ - Node.js默认
+
+## 🌐 为什么选择"总是最新"
+
+Robot CLI 不使用本地缓存，每次创建项目都会下载最新版本的模板：
+
+- ✅ **确保最新**: 总是获得最新的代码和依赖
+- ✅ **避免冲突**: 无需担心缓存过期或版本不一致
+- ✅ **简化维护**: 用户无需管理缓存，开发者无需考虑缓存策略
+- ✅ **减少错误**: 避免因缓存损坏导致的创建失败
 
 ## 🛠 开发指南
 
@@ -116,7 +113,6 @@ robot-cli/
 │   ├── templates.js      # 模板配置
 │   ├── create.js         # 创建流程
 │   ├── download.js       # 下载逻辑
-│   ├── cache.js          # 缓存管理
 │   └── utils.js          # 工具函数
 └── test/local-test.js    # 测试脚本
 ```
@@ -128,7 +124,7 @@ robot-cli/
 'robot-new-template': {
   name: 'Robot新模板',
   description: '模板描述',
-  repo: 'ChenyCHENYU/Robot_New_Template',
+  repoUrl: 'https://github.com/ChenyCHENYU/Robot_New_Template',
   features: ['特性1', '特性2'],
   version: 'full'
 }
@@ -200,7 +196,7 @@ export const TEMPLATE_CATEGORIES = {
             templates: {
               'your-admin': {
                 name: '你的后台模板',
-                repo: 'YOUR_ORG/Your_Admin_Template',
+                repoUrl: 'https://github.com/YOUR_ORG/Your_Admin_Template',
                 // ...
               }
             }
@@ -319,10 +315,7 @@ your-cli generate component MyComponent
 {
   "templateSource": "github",
   "defaultOrg": "YourOrg",
-  "cache": {
-    "enabled": true,
-    "ttl": 86400000
-  }
+  "alwaysLatest": true
 }
 ```
 
@@ -401,13 +394,16 @@ analytics.track('template_used', {
 A: 全局安装CLI：`npm install -g @agile-team/robot-cli`
 
 **Q: 模板下载失败？**  
-A: 检查网络连接，尝试清除缓存：`robot cache --clear`
+A: 检查网络连接，确保能访问GitHub
 
 **Q: 如何添加自定义模板？**  
 A: 创建模板仓库 → 添加配置 → 测试功能
 
 **Q: 支持私有仓库吗？**  
 A: 目前仅支持公开GitHub仓库
+
+**Q: 为什么不使用缓存？**  
+A: 为了确保总是获得最新版本的模板，避免缓存相关的问题
 
 ## 🎉 快速体验
 
