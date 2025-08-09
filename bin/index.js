@@ -3,10 +3,39 @@
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join, resolve } from 'path';
 import { existsSync } from 'fs';
+import { readFileSync } from 'fs';
 
 // 获取当前文件的目录
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * 获取包版本号
+ */
+function getPackageVersion() {
+  try {
+    // 尝试从多个位置读取 package.json
+    const possiblePaths = [
+      join(__dirname, '..', 'package.json'),
+      join(__dirname, 'package.json'),
+      join(__dirname, '..', '..', 'package.json')
+    ];
+    
+    for (const packagePath of possiblePaths) {
+      if (existsSync(packagePath)) {
+        const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+        return packageJson.version || '1.0.0';
+      }
+    }
+    
+    return '1.0.0'; // 默认版本
+  } catch (error) {
+    return '1.0.0'; // 出错时返回默认版本
+  }
+}
+
+// 获取版本号
+const PACKAGE_VERSION = getPackageVersion();
 
 /**
  * 智能路径解析 - 兼容不同包管理器的安装路径
@@ -159,7 +188,7 @@ async function main() {
       
       const titleBox = boxen(
         logo + '\n\n' +
-        '      🤖 Robot 项目脚手架工具  v1.0.4\n' +
+        `      🤖 Robot 项目脚手架工具  v${PACKAGE_VERSION}\n` +
         '         兼容 npm/yarn/pnpm/bun',
         {
           padding: { top: 1, bottom: 1, left: 2, right: 2 },
@@ -233,7 +262,7 @@ async function main() {
     program
       .name('robot')
       .description('🤖 Robot 项目脚手架工具 - @agile-team/robot-cli')
-      .version('1.0.4')
+      .version(PACKAGE_VERSION) // 🎯 使用动态版本号
       .hook('preAction', () => {
         showWelcome();
       });
