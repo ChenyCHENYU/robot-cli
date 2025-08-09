@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/robot-cli",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "🤖 现代化项目脚手架工具，支持多技术栈快速创建项目",
   "type": "module",
   "bin": {
