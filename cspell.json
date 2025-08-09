@@ -1,0 +1,27 @@
+// cSpell Settings
+{
+  // Version of the setting file.  Always 0.2
+  "version": "0.2",
+  // language - current active spelling language
+  "language": "en",
+  // words - list of words to be always considered correct
+  "words": [
+    "CHENY",
+    "CHENYU",
+    "Ifox",
+    "microfrontend",
+    "multiplatform",
+    "tarao",
+    "tauri",
+    "uniapp",
+    "vite",
+    "vuejs",
+    "vuex"
+  ],
+  "ignorePaths": [
+    "README.md"
+  ],
+  // flagWords - list of words to be always considered incorrect
+  // This is useful for offensive words and common spelling errors.
+  "flagWords": []
+}

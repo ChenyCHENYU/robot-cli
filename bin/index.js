@@ -28,7 +28,7 @@ function showWelcome() {
   
   const titleBox = boxen(
     logo + '\n\n' +
-    '      🤖 现代化项目脚手架工具  v1.0.0\n' +
+    '      🤖 Robot 项目脚手架工具  v1.0.0\n' +
     '         ',
     {
       padding: { top: 1, bottom: 1, left: 2, right: 2 },
@@ -101,7 +101,7 @@ async function showMainMenu() {
 
 program
   .name('robot')
-  .description('🤖 现代化项目脚手架工具 - @cheny/robot-cli')
+  .description('🤖 Robot 项目脚手架工具 - @cheny/robot-cli')
   .version('1.0.0')
   .hook('preAction', () => {
     showWelcome();
