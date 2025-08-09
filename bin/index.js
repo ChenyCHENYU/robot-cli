@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join, resolve } from 'path';
 import { existsSync } from 'fs';
 
@@ -61,6 +61,12 @@ async function loadModules() {
   try {
     const libPath = resolveLibPath();
     
+    // 将路径转换为 file:// URL 格式（Windows 兼容）
+    const createUrl = pathToFileURL(join(libPath, 'create.js')).href;
+    const cacheUrl = pathToFileURL(join(libPath, 'cache.js')).href;
+    const templatesUrl = pathToFileURL(join(libPath, 'templates.js')).href;
+    const utilsUrl = pathToFileURL(join(libPath, 'utils.js')).href;
+    
     // 动态导入所有需要的模块
     const [
       { Command },
@@ -76,10 +82,10 @@ async function loadModules() {
       import('chalk'),
       import('boxen'),
       import('inquirer'),
-      import(join(libPath, 'create.js')),
-      import(join(libPath, 'cache.js')),
-      import(join(libPath, 'templates.js')),
-      import(join(libPath, 'utils.js'))
+      import(createUrl),
+      import(cacheUrl),
+      import(templatesUrl),
+      import(utilsUrl)
     ]);
 
     return {
