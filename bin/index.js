@@ -69,7 +69,7 @@ ${possiblePaths.map(p => `  - ${p}`).join('\n')}
   `);
 }
 
-// 动态导入所需模块 - 移除缓存相关模块
+// 动态导入所需模块
 async function loadModules() {
   try {
     const libPath = resolveLibPath();
@@ -162,7 +162,7 @@ async function main() {
       const titleBox = boxen(
         logo + '\n\n' +
         `      🤖 Robot 项目脚手架工具  v${PACKAGE_VERSION}\n` +
-        '         兼容 npm/yarn/pnpm/bun',
+        '         优先 bun，兼容 npm/pnpm/yarn',
         {
           padding: { top: 1, bottom: 1, left: 2, right: 2 },
           borderStyle: 'round',
@@ -176,7 +176,7 @@ async function main() {
       console.log();
     }
 
-    // 显示主菜单 - 移除缓存信息
+    // 显示主菜单
     async function showMainMenu() {
       const title = chalk.white.bold('🚀 快速开始');
       
@@ -187,6 +187,7 @@ async function main() {
       const templateCount = Object.keys(allTemplates).length;
       
       console.log(chalk.dim(`  📦 可用模板: ${templateCount} 个`));
+      console.log(chalk.dim(`  🎯 智能包管理器检测: 优先 bun`));
       console.log(chalk.dim(`  🌐 总是下载最新版本`));
       console.log();
       
@@ -218,10 +219,15 @@ async function main() {
       });
       
       console.log();
-      console.log(chalk.dim('  示例:'));
+      console.log(chalk.dim('  示例命令:'));
       console.log(chalk.dim('    robot create my-vue-admin'));
-      console.log(chalk.dim('    robot search vue'));
       console.log(chalk.dim('    robot create my-app --template robot-admin'));
+      console.log(chalk.dim('    robot search vue'));
+      console.log();
+      console.log(chalk.dim('  创建后的快速开始 (优先 bun):'));
+      console.log(chalk.dim('    cd my-vue-admin'));
+      console.log(chalk.dim('    bun install     # 或 npm install'));
+      console.log(chalk.dim('    bun run dev     # 或 npm run dev'));
       console.log();
     }
 
@@ -233,7 +239,7 @@ async function main() {
         showWelcome();
       });
 
-    // 创建项目命令 - 移除缓存相关选项
+    // 创建项目命令
     program
       .command('create [project-name]')
       .description('创建新项目')
@@ -313,6 +319,7 @@ async function main() {
               console.log(`    ${chalk.dim(template.description)}`);
               console.log(`    ${chalk.dim('功能: ' + template.features.join(', '))}`);
               console.log(`    ${chalk.dim('使用: robot create my-app --template ' + template.key)}`);
+              console.log(`    ${chalk.dim('快速开始: cd my-app && bun install && bun run dev')}`);
               console.log();
             });
           });
@@ -347,6 +354,7 @@ async function main() {
               console.log(`  ${chalk.dim(template.description)}`);
               console.log(`  ${chalk.dim('功能: ' + template.features.join(', '))}`);
               console.log(`  ${chalk.cyan('robot create my-app --template ' + key)}`);
+              console.log(`  ${chalk.dim('然后: cd my-app && bun install && bun run dev')}`);
               console.log();
             });
           }
