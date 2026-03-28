@@ -28,6 +28,13 @@ import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
 
 const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
 
+/** 过滤掉尚未发布（status: "coming-soon"）的模板 */
+function filterAvailable<T extends { status?: string }>(
+  map: Record<string, T>,
+): Record<string, T> {
+  return Object.fromEntries(Object.entries(map).filter(([, t]) => t.status !== "coming-soon"));
+}
+
 // ── Main Entry ───────────────────────────────────────────────────
 
 export async function createProject(
@@ -207,6 +214,7 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
   const options: { value: string; label: string; hint?: string }[] = [];
 
   for (const [key, template] of Object.entries(recommended)) {
+    if (template.status === "coming-soon") continue;
     const ver = VERSION_LABELS[template.version] || template.version;
     const tags = template.features.slice(0, 3).join(", ");
     options.push({
@@ -300,7 +308,17 @@ async function selectByCategory(): Promise<SelectedTemplate> {
     }
 
     // Step 4: Select template
-    const templates = getTemplatesByCategory(catKey, stackKey, patternKey);
+    const allTemplates = getTemplatesByCategory(catKey, stackKey, patternKey);
+    const templates = filterAvailable(allTemplates);
+    const comingSoonCount = Object.keys(allTemplates).length - Object.keys(templates).length;
+
+    if (Object.keys(templates).length === 0) {
+      const names = Object.values(allTemplates).map((t) => t.name).join("、");
+      p.log.warn(`该分类下的模板正在建设中，敬请期待 (${names})`);
+      await new Promise((r) => setTimeout(r, 600));
+      continue;
+    }
+
     const tplOptions = Object.entries(templates).map(([key, t]) => {
       const ver = VERSION_LABELS[t.version] || t.version;
       return {
@@ -309,6 +327,13 @@ async function selectByCategory(): Promise<SelectedTemplate> {
         hint: t.description,
       };
     });
+    if (comingSoonCount > 0) {
+      tplOptions.push({
+        value: "__coming_soon__",
+        label: chalk.dim(`+ ${comingSoonCount} 个模板开发中...`),
+        hint: "敬请期待",
+      });
+    }
     tplOptions.push({ value: "back", label: "<- 返回", hint: "" });
 
     const tplKey = await p.select({
@@ -318,6 +343,11 @@ async function selectByCategory(): Promise<SelectedTemplate> {
 
     if (p.isCancel(tplKey)) process.exit(0);
     if (tplKey === "back") continue;
+    if (tplKey === "__coming_soon__") {
+      p.log.warn("该模板正在开发中，敬请期待！");
+      await new Promise((r) => setTimeout(r, 600));
+      continue;
+    }
 
     const t = templates[tplKey];
     return { key: tplKey, ...t };
@@ -336,8 +366,9 @@ async function selectBySearch(): Promise<SelectedTemplate> {
     if (p.isCancel(keyword)) return await selectTemplateMethod();
 
     const results = searchTemplates(keyword);
+    const availableResults = filterAvailable(results);
 
-    if (Object.keys(results).length === 0) {
+    if (Object.keys(availableResults).length === 0) {
       p.log.warn(`没有找到匹配的模板 (关键词: "${keyword}")`);
 
       const action = await p.select({
@@ -352,11 +383,11 @@ async function selectBySearch(): Promise<SelectedTemplate> {
       continue;
     }
 
-    p.log.info(`关键词: "${keyword}" -- 找到 ${Object.keys(results).length} 个匹配模板`);
+    p.log.info(`关键词: "${keyword}" -- 找到 ${Object.keys(availableResults).length} 个匹配模板`);
 
     const options: { value: string; label: string; hint?: string }[] = [];
 
-    for (const [key, t] of Object.entries(results)) {
+    for (const [key, t] of Object.entries(availableResults)) {
       const ver = VERSION_LABELS[t.version] || t.version;
       const info = t.features.slice(0, 3).join(", ");
       options.push({
@@ -380,7 +411,7 @@ async function selectBySearch(): Promise<SelectedTemplate> {
     if (selected === "search_again") continue;
     if (selected === "back_to_mode") return await selectTemplateMethod();
 
-    const t = results[selected];
+    const t = availableResults[selected];
     return { key: selected, ...t };
   }
 }
@@ -389,8 +420,13 @@ async function selectBySearch(): Promise<SelectedTemplate> {
 
 async function selectFromAll(): Promise<SelectedTemplate> {
   const allTemplates = getAllTemplates();
+  const availableTemplates = filterAvailable(allTemplates);
+  const comingSoonCount = Object.keys(allTemplates).length - Object.keys(availableTemplates).length;
 
-  p.log.info(chalk.bold("所有可用模板") + chalk.dim(` -- 共 ${Object.keys(allTemplates).length} 个模板可选`));
+  const countInfo = comingSoonCount > 0
+    ? chalk.dim(` -- 共 ${Object.keys(availableTemplates).length} 个可用，${comingSoonCount} 个开发中`)
+    : chalk.dim(` -- 共 ${Object.keys(availableTemplates).length} 个模板可选`);
+  p.log.info(chalk.bold("所有可用模板") + countInfo);
 
   const options: { value: string; label: string; hint?: string }[] = [];
 
@@ -398,6 +434,7 @@ async function selectFromAll(): Promise<SelectedTemplate> {
     for (const [_sKey, stack] of Object.entries(category.stacks)) {
       for (const _pattern of Object.values(stack.patterns)) {
         for (const [key, t] of Object.entries(_pattern.templates)) {
+          if (t.status === "coming-soon") continue;
           const ver = VERSION_LABELS[t.version] || t.version;
           options.push({
             value: key,
@@ -419,11 +456,11 @@ async function selectFromAll(): Promise<SelectedTemplate> {
   if (p.isCancel(selected)) process.exit(0);
   if (selected === "back_to_mode") return await selectTemplateMethod();
 
-  const t = allTemplates[selected];
+  const t = availableTemplates[selected];
   return { key: selected, ...t };
 }
 
-// ── Project Configuration ────────────────────────────────────────
+// ── Project Configuration ─────────────────────────────────────────
 
 async function configureProject(
   options: CreateOptions,
