@@ -1,36 +1,23 @@
 {
   "name": "@agile-team/robot-cli",
-  "version": "1.1.12",
+  "version": "2.0.0",
   "description": "🤖 现代化项目脚手架工具，支持多技术栈快速创建项目 - 优先 bun，兼容 npm/pnpm/yarn",
   "type": "module",
   "bin": {
-    "robot": "bin/index.js"
+    "robot": "bin/robot.js"
   },
   "scripts": {
-    "robot": "node bin/index.js",
-    "robot:create": "node bin/index.js create",
-    "robot:list": "node bin/index.js list",
-    "robot:search": "node bin/index.js search",
-    "test": "node test/local-test.js",
-    "test:setup": "node test/local-test.js --setup",
-    "test:clean": "node test/local-test.js --clean",
-    "dev": "node bin/index.js",
-    "dev:create": "node bin/index.js create",
-    "dev:list": "node bin/index.js list",
-    "dev:search": "node bin/index.js search",
-    "install:deps": "bun install",
-    "install:fallback": "npm install",
-    "clean:modules": "rm -rf node_modules",
-    "reinstall": "npm run clean:modules && npm run install:deps",
-    "prepublishOnly": "npm run test",
-    "version:patch": "npm version patch",
-    "version:minor": "npm version minor",
-    "version:major": "npm version major",
-    "publish:npm": "npm publish --access public",
-    "release:patch": "npm run version:patch && npm run publish:npm",
-    "release:minor": "npm run version:minor && npm run publish:npm",
-    "release:major": "npm run version:major && npm run publish:npm",
-    "clean:all": "npm run test:clean && npm run reinstall"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint src/ tests/",
+    "lint:fix": "oxlint --fix src/ tests/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build && bun run test",
+    "release:patch": "bun version patch && bunx npm publish --access public",
+    "release:minor": "bun version minor && bunx npm publish --access public",
+    "release:major": "bun version major && bunx npm publish --access public"
   },
   "dependencies": {
     "boxen": "^7.1.0",
@@ -39,13 +26,22 @@
     "extract-zip": "^2.0.1",
     "fs-extra": "^11.1.0",
     "inquirer": "^9.2.0",
-    "node-fetch": "^3.3.0",
     "ora": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^22.0.0",
+    "oxlint": "^0.16.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   },
   "files": [
     "bin",
-    "lib",
-    "README.md"
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "keywords": [
     "cli",

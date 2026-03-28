@@ -1,420 +1,339 @@
 # 🤖 Robot CLI
 
-> 现代化项目脚手架工具，专为团队协作打造
+> **现代化工程脚手架** — 一条命令，60 秒搭建标准化项目
 
-一条命令，60秒搭建完整项目。支持多种技术栈、多种架构模式，让项目创建变得简单高效。
+[![npm version](https://img.shields.io/npm/v/@agile-team/robot-cli)](https://www.npmjs.com/package/@agile-team/robot-cli)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## ✨ 核心特性
+---
 
-- **🎯 智能模板分类** - 推荐模板、分类浏览、关键词搜索
-- **⚡ 极速项目创建** - 一条命令创建完整项目架构
-- **📦 现代包管理器** - 优先推荐 bun/pnpm，智能检测最佳选择
-- **🌐 总是最新版本** - 每次创建都下载最新模板，无缓存困扰
-- **🎨 友好用户界面** - 现代化终端交互，清晰进度提示
+## 目录
+
+- [快速开始](#-快速开始)
+- [模板一览](#-模板一览)
+- [命令详解](#-命令详解)
+- [进阶用法](#-进阶用法)
+- [项目结构](#-项目结构)
+- [二次开发指南](#-二次开发指南)
+- [常见问题](#-常见问题)
+
+---
 
 ## 🚀 快速开始
 
 ### 安装
+
 ```bash
+# 推荐 bun（极速）
+bun add -g @agile-team/robot-cli
+
+# 或 npm
 npm install -g @agile-team/robot-cli
 ```
 
-### 创建项目
+### 30 秒上手
+
 ```bash
-# 交互式创建（推荐）
+# 交互式创建（推荐，会引导你选模板、填信息）
 robot create
 
-# 快速创建指定模板
-robot create my-vue-admin --template robot-admin
+# 直接指定模板 + 项目名
+robot create my-project -t robot-admin
 
-# 查看所有模板
-robot list
+# 零安装体验
+bunx @agile-team/robot-cli create my-project
+# 或
+npx @agile-team/robot-cli create my-project
 ```
 
-## 📋 支持的模板
+---
 
-### 🎨 前端项目
-| 技术栈 | 模板 | 描述 |
-|-------|------|------|
-| **Vue.js** | `robot-admin` | 后台管理系统完整版 |
-| | `robot-admin-base` | 后台管理系统精简版 |
-| | `robot-micro` | 微前端架构(MicroApp) |
-| **React.js** | `robot-react` | React后台完整版 |
+## 📋 模板一览
+
+### 🎨 前端项目（Vue.js）
+
+| 模板 Key | 名称 | 架构模式 | 说明 |
+|---------|------|---------|------|
+| `robot-admin` | Robot Admin 完整版 | 单体应用 | 30+ 完整示例、权限管理、图表组件、Naive UI |
+| `robot-admin-base` | Robot Admin 精简版 | 单体应用 | 基础架构、核心功能、快速启动 |
+| `robot-monorepo` | Robot Monorepo | Monorepo | bun workspace 多包管理架构 |
+| `robot-micro-app` | Robot MicroApp | 微前端 | 基于 MicroApp 的微前端方案 |
+| `robot-module-federation` | Robot Module Federation | 模块联邦 | 基于 Vite Module Federation |
+
+> **前端模板源码仓库**：[ChenyCHENYU/Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)
+> 不同架构通过分支区分：`main`（全量）、`monorepo`、`micro-app`、`module-federation`
+
+### 🎨 前端项目（React.js）
+
+| 模板 Key | 名称 | 说明 |
+|---------|------|------|
+| `robot-react` | Robot React 完整版 | Ant Design + 完整功能演示 |
+| `robot-react-base` | Robot React 精简版 | 基础 React + 核心功能 |
 
 ### 📱 移动端项目
-| 技术栈 | 模板 | 描述 |
-|-------|------|------|
-| **uni-app** | `robot-uniapp` | 多端应用(小程序/H5/App) |
+
+| 模板 Key | 名称 | 说明 |
+|---------|------|------|
+| `robot-uniapp` | Robot uni-app 完整版 | 多端适配（小程序/H5/App）+ 完整示例 |
+| `robot-uniapp-base` | Robot uni-app 精简版 | 基础框架 + 核心功能 |
+| `robot-taro` | Robot Taro 完整版 | 原生性能 + 跨平台（🔜 筹备中） |
+| `robot-taro-base` | Robot Taro 精简版 | 基础 Taro 框架（🔜 筹备中） |
 
 ### 🚀 后端项目
-| 技术栈 | 模板 | 描述 |
-|-------|------|------|
-| **NestJS** | `robot-nest` | 企业级Node.js框架 |
-| **Koa3** | `robot-koa` | 轻量级Node.js框架 |
+
+| 模板 Key | 名称 | 说明 |
+|---------|------|------|
+| `robot-nest` | Robot NestJS 完整版 | TypeORM + JWT + Swagger + Redis |
+| `robot-nest-base` | Robot NestJS 精简版 | 基础 NestJS + 核心模块 |
+| `robot-nest-micro` | Robot NestJS 微服务 | gRPC + 服务发现 |
+| `robot-koa` | Robot Koa3 完整版 | TypeScript + JWT + MySQL |
+| `robot-koa-base` | Robot Koa3 精简版 | 基础 Koa3 + 核心中间件 |
 
 ### 💻 桌面端项目
-| 技术栈 | 模板 | 描述 |
-|-------|------|------|
-| **Electron** | `robot-electron` | 跨平台桌面应用 |
-| **Tauri** | `robot-tauri` | 轻量级桌面应用 |
+
+| 模板 Key | 名称 | 说明 |
+|---------|------|------|
+| `robot-electron` | Robot Electron 完整版 | Vue3 + Electron + 自动更新 |
+| `robot-electron-base` | Robot Electron 精简版 | 基础 Electron + Vue 框架 |
+| `robot-tauri` | Robot Tauri 完整版 | Rust 后端 + Vue 前端 + 原生性能 |
+| `robot-tauri-base` | Robot Tauri 精简版 | 基础 Tauri + Vue 框架 |
+
+---
 
 ## 📖 命令详解
 
-### 创建项目
+### `robot create [project-name]` — 创建项目
+
 ```bash
-# 交互式创建
+# 交互式（最常用）
 robot create
 
-# 指定模板
-robot create my-project --template robot-admin
+# 指定项目名 + 模板
+robot create my-app -t robot-admin
+
+# 从自定义 Git 仓库创建
+robot create my-app --from https://github.com/your-org/your-template
+
+# 预览模式（不实际创建，只展示将要执行的操作）
+robot create my-app -t robot-admin --dry-run
 
 # 跳过依赖安装
-robot create my-project --skip-install
+robot create my-app -t robot-admin --skip-install
+
+# 强制不使用缓存
+robot create my-app -t robot-admin --no-cache
 ```
 
-### 模板管理
+| 参数 | 说明 |
+|------|------|
+| `-t, --template <name>` | 指定模板 key（见上方模板一览） |
+| `--from <url>` | 从任意 Git 仓库 URL 创建 |
+| `--dry-run` | 预览模式，不实际执行 |
+| `--skip-install` | 跳过依赖安装 |
+| `--no-cache` | 不使用本地缓存 |
+
+### `robot list` — 查看模板列表
+
 ```bash
-# 查看所有模板
-robot list
-
-# 查看推荐模板
-robot list --recommended
-
-# 搜索模板
-robot search vue
-robot search admin
+robot list              # 所有模板
+robot list -r           # 只看推荐模板
 ```
 
-## 📦 包管理器优先级
+### `robot search <keyword>` — 搜索模板
 
-Robot CLI 智能选择最佳包管理器：
+```bash
+robot search vue        # 搜 Vue 相关
+robot search 微前端     # 搜关键词
+robot search admin      # 搜后台管理
+```
 
-1. **bun** 🥇 - 极速安装，现代化
-2. **pnpm** 🥈 - 快速安装，节省空间  
-3. **yarn** ⚖️ - 兼容现有项目
-4. **npm** ⚖️ - Node.js默认
+### `robot doctor` — 环境诊断
 
-## 🌐 为什么选择"总是最新"
+```bash
+robot doctor            # 检查 Node、Git、包管理器、网络
+robot doctor --clear-cache  # 清理模板缓存
+```
 
-Robot CLI 不使用本地缓存，每次创建项目都会下载最新版本的模板：
+---
 
-- ✅ **确保最新**: 总是获得最新的代码和依赖
-- ✅ **避免冲突**: 无需担心缓存过期或版本不一致
-- ✅ **简化维护**: 用户无需管理缓存，开发者无需考虑缓存策略
-- ✅ **减少错误**: 避免因缓存损坏导致的创建失败
+## 🔧 进阶用法
 
-## 🛠 开发指南
+### 包管理器优先级
 
-### 项目结构
+创建项目时会自动检测已安装的包管理器，推荐顺序：
+
+| 优先级 | 包管理器 | 说明 |
+|--------|---------|------|
+| 🥇 | **bun** | 极速安装，现代化 |
+| 🥈 | **pnpm** | 快速安装，节省磁盘 |
+| 🥉 | **yarn** | 兼容性好 |
+| 4 | **npm** | Node.js 内置 |
+
+### 离线缓存
+
+首次下载的模板会自动缓存到 `~/.robot-cli/cache/`。当网络不可用时自动回退到缓存版本。
+
+```bash
+# 查看缓存状态
+robot doctor
+
+# 清理缓存
+robot doctor --clear-cache
+
+# 单次跳过缓存（强制下载最新）
+robot create my-app -t robot-admin --no-cache
+```
+
+### 从自定义 Git 仓库创建
+
+不限于内置模板，可以从任意公开 Git 仓库创建：
+
+```bash
+robot create my-app --from https://github.com/your-org/your-template
+robot create my-app --from https://gitee.com/your-org/your-template
+```
+
+---
+
+## 🗂 项目结构
+
 ```
 robot-cli/
-├── bin/index.js          # CLI入口
-├── lib/
-│   ├── templates.js      # 模板配置
-│   ├── create.js         # 创建流程
-│   ├── download.js       # 下载逻辑
-│   └── utils.js          # 工具函数
-└── test/local-test.js    # 测试脚本
+├── bin/robot.js            # CLI 入口（thin shim）
+├── src/                    # TypeScript 源码
+│   ├── index.ts            # 主入口 & Commander 命令注册
+│   ├── create.ts           # 交互式创建流程
+│   ├── download.ts         # 模板下载 & 缓存管理
+│   ├── templates.ts        # 内置模板注册表
+│   ├── doctor.ts           # 环境诊断
+│   ├── utils.ts            # 工具函数
+│   └── types.ts            # 类型定义
+├── tests/                  # Vitest 单元测试
+│   ├── validate.test.ts
+│   ├── templates.test.ts
+│   └── download.test.ts
+├── dist/                   # tsup 构建输出（ESM）
+├── tsconfig.json
+├── tsup.config.ts
+├── vitest.config.ts
+├── .github/workflows/      # CI/CD
+│   ├── ci.yml              # PR → lint + typecheck + build + test
+│   └── release.yml         # tag → publish npm
+├── package.json
+├── CHANGELOG.md
+└── README.md
 ```
 
-### 添加新模板
+---
 
-1. 在 `lib/templates.js` 中添加配置：
-```javascript
-'robot-new-template': {
-  name: 'Robot新模板',
-  description: '模板描述',
-  repoUrl: 'https://github.com/ChenyCHENYU/Robot_New_Template',
-  features: ['特性1', '特性2'],
-  version: 'full'
-}
-```
+## 🛠 二次开发指南
 
-2. 模板仓库要求：
-- 包含 `package.json` 和 `README.md`
-- 使用 `_gitignore` 而不是 `.gitignore`
-- 使用 `_env.example` 而不是 `.env.example`
+### 1. 克隆 & 启动
 
-3. 命名规范：
-- **模板key**: `robot-xxx` (如：robot-admin)
-- **仓库名**: `Robot_Xxx` (如：Robot_Admin)
-- **精简版**: 加 `-base` 后缀
-
-### 本地测试
 ```bash
-# 克隆项目
 git clone https://github.com/ChenyCHENYU/robot-cli.git
-cd robot-cli && npm install && npm link
-
-# 创建测试环境
-npm run test:setup
-
-# 测试命令
-robot create test-project
-```
-
-## 🔧 扩展与定制
-
-### 基于Robot CLI二次开发
-
-如果你想基于Robot CLI创建自己的脚手架工具：
-
-#### 1. Fork和克隆
-```bash
-# Fork GitHub仓库后克隆
-git clone https://github.com/YOUR_USERNAME/robot-cli.git
 cd robot-cli
-npm install
+bun install          # 安装依赖（或 npm install）
+bun run build        # 构建
+bun run test         # 运行测试
 ```
 
-#### 2. 修改配置
+### 2. 本地开发
+
 ```bash
-# 修改package.json
+bun run dev          # watch 模式构建
+bun link             # 全局链接到本地 CLI
+
+# 另一个终端测试
+robot create test-app
+```
+
+### 3. 添加新模板
+
+编辑 `src/templates.ts`，在对应分类下新增：
+
+```ts
+"robot-your-template": {
+  name: "你的模板名称",
+  description: "模板描述",
+  repoUrl: "https://github.com/your-org/your-repo",
+  branch: "main",               // 可选，默认 main
+  features: ["特性1", "特性2"],
+  version: "full",               // full | base | micro
+}
+```
+
+**模板仓库规范**：
+- 必须包含 `package.json`
+- 使用 `_gitignore` 代替 `.gitignore`（npm publish 会忽略 `.gitignore`）
+- 使用 `_env.example` 代替 `.env.example`
+
+### 4. 修改 CLI 品牌
+
+```ts
+// package.json
 {
-  "name": "@yourteam/your-cli",
-  "bin": {
-    "your-cli": "./bin/index.js"
-  }
+  "name": "@your-team/your-cli",
+  "bin": { "your-cli": "bin/robot.js" }
 }
 
-# 修改bin/index.js中的程序名称
+// src/index.ts — 修改 banner、程序名
 program.name('your-cli')
 ```
 
-#### 3. 自定义模板源
-```javascript
-// lib/templates.js - 替换为你的模板仓库
-export const TEMPLATE_CATEGORIES = {
-  frontend: {
-    name: '🎨 前端项目',
-    stacks: {
-      vue: {
-        name: 'Vue.js',
-        patterns: {
-          monolith: {
-            name: '单体应用',
-            templates: {
-              'your-admin': {
-                name: '你的后台模板',
-                repoUrl: 'https://github.com/YOUR_ORG/Your_Admin_Template',
-                // ...
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-```
+### 5. 构建 & 发布
 
-#### 4. 定制交互界面
-```javascript
-// lib/create.js - 修改欢迎信息和Logo
-function showWelcome() {
-  const logoLines = [
-    '   ██    ██  ██████  ██    ██ ██████  ',
-    '    ██  ██  ██    ██ ██    ██ ██   ██ ',
-    '     ████   ██    ██ ██    ██ ██████  ',
-    '      ██    ██    ██ ██    ██ ██   ██ ',
-    '      ██     ██████   ██████  ██   ██ '
-  ];
-  // 自定义你的Logo和标题
-}
-```
-
-#### 5. 发布自己的CLI
 ```bash
-# 更新版本
-npm version 1.0.0
+bun run lint         # 代码检查
+bun run typecheck    # 类型检查
+bun run build        # 构建
+bun run test         # 测试
 
-# 发布到npm
+# 发布
 npm publish --access public
-
-# 全局安装测试
-npm install -g @yourteam/your-cli
-your-cli create my-project
 ```
 
-### 企业内部定制方案
+### 技术栈
 
-#### 私有npm源
+| 类别 | 工具 |
+|------|------|
+| 语言 | TypeScript 5.7+ (strict) |
+| 构建 | tsup 8 (ESM, target node20) |
+| 测试 | Vitest 3 |
+| 检查 | oxlint |
+| 运行时 | Node.js >= 20 |
+| 包管理 | bun (主) / npm (兼容) |
+
+---
+
+## ❓ 常见问题
+
+**Q: 提示 `command not found: robot`**
 ```bash
-# 发布到企业私有npm
-npm publish --registry=https://your-company-npm.com
-
-# 用户安装
-npm install -g @yourcompany/cli --registry=https://your-company-npm.com
+bun add -g @agile-team/robot-cli   # 重新全局安装
+# 或
+npx @agile-team/robot-cli create   # 免安装使用
 ```
 
-#### 模板源配置
-```javascript
-// 支持配置文件 ~/.your-cli-config.json
-{
-  "templateSource": "https://your-git-server.com",
-  "defaultOrg": "YOUR_COMPANY",
-  "defaultBranch": "main"
-}
-```
-
-#### 批量模板管理
-```javascript
-// lib/templates.js - 支持动态加载模板列表
-export async function loadTemplatesFromAPI() {
-  const response = await fetch('https://your-api.com/templates');
-  return response.json();
-}
-```
-
-### 插件化扩展
-
-#### 添加自定义命令
-```javascript
-// lib/plugins/deploy.js
-export function addDeployCommand(program) {
-  program
-    .command('deploy')
-    .description('部署项目到服务器')
-    .action(async () => {
-      // 你的部署逻辑
-    });
-}
-
-// bin/index.js
-import { addDeployCommand } from '../lib/plugins/deploy.js';
-addDeployCommand(program);
-```
-
-#### 添加自定义生成器
-```javascript
-// lib/generators/component.js
-export async function generateComponent(name, options) {
-  // 生成组件文件的逻辑
-}
-
-// 使用
-your-cli generate component MyComponent
-```
-
-### 配置文件支持
-
-#### 项目级配置
-```json
-// robot.config.json
-{
-  "defaultTemplate": "your-admin",
-  "packageManager": "pnpm",
-  "gitInit": true,
-  "plugins": ["@yourteam/cli-plugin-deploy"]
-}
-```
-
-#### 全局配置
-```json
-// ~/.robot-cli/config.json
-{
-  "templateSource": "github",
-  "defaultOrg": "YourOrg",
-  "alwaysLatest": true
-}
-```
-
-### 高级定制示例
-
-#### 1. 多源模板支持
-```javascript
-// 支持从多个源获取模板
-const TEMPLATE_SOURCES = {
-  github: 'https://github.com',
-  gitlab: 'https://gitlab.com',
-  gitee: 'https://gitee.com',
-  custom: process.env.CUSTOM_TEMPLATE_SOURCE
-};
-```
-
-#### 2. 模板预处理
-```javascript
-// 模板下载后的预处理钩子
-export async function preprocessTemplate(templatePath, options) {
-  // 替换模板中的占位符
-  // 执行自定义脚本
-  // 添加企业标准配置
-}
-```
-
-#### 3. 集成CI/CD
-```javascript
-// 创建项目后自动设置CI/CD
-export async function setupCICD(projectPath, options) {
-  if (options.cicd) {
-    await generateGitlabCI(projectPath);
-    await generateDockerfile(projectPath);
-  }
-}
-```
-
-### 维护指南
-
-#### 版本管理策略
+**Q: 模板下载失败 / 超时**
 ```bash
-# 语义化版本
-major.minor.patch
-
-# 发布流程
-npm run test
-npm run build
-npm version patch
-npm publish
-git push --tags
+robot doctor                        # 先诊断网络
+robot create my-app --no-cache      # 跳过缓存重试
 ```
 
-#### 模板同步
-```bash
-# 定期同步模板仓库
-npm run sync-templates
+**Q: 如何使用私有仓库模板？**
+目前仅支持公开仓库。私有仓库支持计划中。
 
-# 检查模板有效性
-npm run validate-templates
-```
+**Q: Monorepo / 微前端 / 模块联邦有什么区别？**
+| 架构 | 适用场景 | 模板 Key |
+|------|---------|---------|
+| 单体应用 | 中小项目，快速启动 | `robot-admin` |
+| Monorepo | 大型项目，多包共享 | `robot-monorepo` |
+| MicroApp 微前端 | 多团队协作，独立部署 | `robot-micro-app` |
+| Module Federation | 运行时共享模块 | `robot-module-federation` |
 
-#### 监控和分析
-```javascript
-// 添加使用统计
-import analytics from './lib/analytics.js';
-
-analytics.track('template_used', {
-  template: template.key,
-  version: packageJson.version
-});
-```
-
-## 🔧 常见问题
-
-**Q: 提示 "command not found"？**  
-A: 全局安装CLI：`npm install -g @agile-team/robot-cli`
-
-**Q: 模板下载失败？**  
-A: 检查网络连接，确保能访问GitHub
-
-**Q: 如何添加自定义模板？**  
-A: 创建模板仓库 → 添加配置 → 测试功能
-
-**Q: 支持私有仓库吗？**  
-A: 目前仅支持公开GitHub仓库
-
-**Q: 为什么不使用缓存？**  
-A: 为了确保总是获得最新版本的模板，避免缓存相关的问题
-
-## 🎉 快速体验
-
-```bash
-# 安装并创建项目
-npm install -g @agile-team/robot-cli
-robot create my-awesome-project
-
-# 启动开发服务器
-cd my-awesome-project && bun install && bun run dev
-```
+---
 
 ## 🤝 贡献
 
@@ -424,16 +343,16 @@ cd my-awesome-project && bun install && bun run dev
 
 MIT License
 
-## 🔗 相关链接
+## 🔗 链接
 
-- [GitHub仓库](https://github.com/ChenyCHENYU/robot-cli)
-- [npm包](https://www.npmjs.com/package/@agile-team/robot-cli)  
-- [问题反馈](https://github.com/ChenyCHENYU/robot-cli/issues)
+- [GitHub](https://github.com/ChenyCHENYU/robot-cli)
+- [npm](https://www.npmjs.com/package/@agile-team/robot-cli)
+- [Issues](https://github.com/ChenyCHENYU/robot-cli/issues)
+- [前端模板仓库](https://github.com/ChenyCHENYU/Robot_Admin)
 
 ---
 
-**让项目创建变得简单高效，专注于业务逻辑的实现！** 🚀
-
 ```bash
-npx @agile-team/robot-cli create my-project
+# 立即体验
+bunx @agile-team/robot-cli create my-awesome-project
 ```
