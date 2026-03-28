@@ -10,7 +10,7 @@ export interface DoctorOptions {
 
 export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   console.log();
-  console.log(chalk.blue.bold("🏥 Robot CLI 环境诊断"));
+  console.log(chalk.blue.bold("Robot CLI 环境诊断"));
   console.log();
 
   const results: {

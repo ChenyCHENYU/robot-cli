@@ -10,9 +10,9 @@ import {
 
 export { TEMPLATE_CATEGORIES };
 
-let remoteTemplates: Record<string, TemplateConfig> | null = null;
-
 // ── Remote Registry ──────────────────────────────────────────────
+
+let remoteTemplates: Record<string, TemplateConfig> | null = null;
 
 export async function loadRemoteRegistry(): Promise<void> {
   try {

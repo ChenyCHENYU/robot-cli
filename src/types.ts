@@ -76,11 +76,3 @@ export interface CacheIndex {
   version: number;
   entries: Record<string, CacheEntry>;
 }
-
-// ── Doctor ───────────────────────────────────────────────────────
-export interface DoctorResult {
-  name: string;
-  status: "ok" | "warn" | "error";
-  version?: string;
-  message: string;
-}

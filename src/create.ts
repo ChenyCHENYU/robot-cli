@@ -12,7 +12,7 @@ import {
   searchTemplates,
   getRecommendedTemplates,
 } from "./templates";
-import { START_COMMAND_MAP } from "./config";
+import { START_COMMAND_MAP, VERSION_LABELS } from "./config";
 import {
   validateProjectName,
   copyTemplate,
@@ -24,6 +24,17 @@ import {
 } from "./utils";
 import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
 
+// ── Helpers ──────────────────────────────────────────────────────
+
+function getVersionLabel(version: string): string {
+  const label = VERSION_LABELS[version] || version;
+  if (version === "full") return chalk.green(`[${label}]`);
+  if (version === "micro") return chalk.blue(`[${label}]`);
+  return chalk.yellow(`[${label}]`);
+}
+
+const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
+
 // ── Main Entry ───────────────────────────────────────────────────
 
 export async function createProject(
@@ -31,7 +42,7 @@ export async function createProject(
   options: CreateOptions = {},
 ): Promise<void> {
   console.log();
-  console.log(chalk.cyan("🚀 Robot CLI - 开始创建项目"));
+  console.log(chalk.cyan("  Robot CLI - 开始创建项目"));
   console.log();
 
   // 1. Select template
@@ -47,7 +58,7 @@ export async function createProject(
       features: [],
       version: "full",
     };
-    console.log(chalk.blue(`📦 使用自定义模板: ${chalk.dim(options.from)}`));
+    console.log(chalk.blue(`使用自定义模板: ${chalk.dim(options.from)}`));
     console.log();
   } else {
     template = await selectTemplate(options.template);
@@ -169,8 +180,8 @@ async function selectTemplate(
 
 async function selectTemplateMethod(): Promise<SelectedTemplate> {
   console.log();
-  console.log(chalk.blue.bold("🎯 选择模板创建方式"));
-  console.log(chalk.dim("请选择最适合你的模板浏览方式"));
+  console.log(chalk.bold("  选择模板创建方式"));
+  console.log(chalk.dim("  请选择最适合你的模板浏览方式"));
   console.log();
 
   const { selectionMode } = await inquirer.prompt<{ selectionMode: string }>([
@@ -180,22 +191,19 @@ async function selectTemplateMethod(): Promise<SelectedTemplate> {
       message: "模板选择方式:",
       choices: [
         {
-          name: `● ${chalk.bold("推荐模板")} ${chalk.dim("(常用模板快速选择) - 基于团队使用频率推荐的热门模板")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("推荐模板")} ${chalk.dim("— 基于团队使用频率推荐的热门模板")}`,
           value: "recommended",
         },
-        { name: chalk.dim("─".repeat(70)), value: "sep1", disabled: true },
         {
-          name: `● ${chalk.bold("分类模板")} ${chalk.dim("(按项目类型分类选择) - 前端、后端、移动端、桌面端分类浏览")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("分类浏览")} ${chalk.dim("— 前端、后端、移动端、桌面端分类")}`,
           value: "category",
         },
-        { name: chalk.dim("─".repeat(70)), value: "sep2", disabled: true },
         {
-          name: `● ${chalk.bold("搜索模板")} ${chalk.dim("(关键词搜索) - 通过技术栈、功能特性等关键词快速查找")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("关键词搜索")} ${chalk.dim("— 按技术栈、功能特性查找")}`,
           value: "search",
         },
-        { name: chalk.dim("─".repeat(70)), value: "sep3", disabled: true },
         {
-          name: `● ${chalk.bold("全部模板")} ${chalk.dim("(查看所有可用模板) - 按分类展示所有可用的项目模板")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("全部模板")} ${chalk.dim("— 查看所有可用模板")}`,
           value: "all",
         },
       ],
@@ -228,8 +236,8 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
   }
 
   console.log();
-  console.log(chalk.blue.bold("🎯 推荐模板"));
-  console.log(chalk.dim("基于团队使用频率和项目成熟度推荐"));
+  console.log(chalk.bold("  推荐模板"));
+  console.log(chalk.dim("  基于团队使用频率和项目成熟度推荐"));
   console.log();
 
   const choices: object[] = [];
@@ -240,13 +248,10 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
       .slice(0, 3)
       .map((f) => chalk.dim(`[${f}]`))
       .join(" ");
-    const ver =
-      template.version === "full"
-        ? chalk.green("[完整版]")
-        : chalk.yellow("[精简版]");
+    const ver = getVersionLabel(template.version);
 
     choices.push({
-      name: `${chalk.bold.white(template.name.replace(/\s*(完整版|精简版)\s*$/, ""))} ${ver} - ${chalk.dim(template.description)}\n   ${tags}${template.features.length > 3 ? chalk.dim(` +${template.features.length - 3}more`) : ""}`,
+      name: `${chalk.bold.white(template.name.replace(STRIP_VERSION_RE, ""))} ${ver} - ${chalk.dim(template.description)}\n   ${tags}${template.features.length > 3 ? chalk.dim(` +${template.features.length - 3}more`) : ""}`,
       value: { key, ...template },
       short: template.name,
     });
@@ -260,7 +265,7 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
     }
   });
 
-  choices.push({ name: chalk.dim("⬅️  返回选择其他方式"), value: "back" });
+  choices.push({ name: chalk.dim("  <- 返回选择其他方式"), value: "back" });
 
   const { selectedTemplate } = await inquirer.prompt<{
     selectedTemplate: SelectedTemplate | string;
@@ -433,7 +438,7 @@ async function selectBySearch(): Promise<SelectedTemplate> {
 
     if (Object.keys(results).length === 0) {
       console.log();
-      console.log(chalk.yellow("🔍 没有找到匹配的模板"));
+      console.log(chalk.yellow("没有找到匹配的模板"));
       console.log(chalk.dim(`搜索关键词: "${keyword}"`));
       console.log();
 
@@ -443,8 +448,8 @@ async function selectBySearch(): Promise<SelectedTemplate> {
           name: "action",
           message: "请选择下一步操作:",
           choices: [
-            { name: "🔍 重新搜索", value: "retry" },
-            { name: "⬅️  返回模板选择方式", value: "back" },
+            { name: "重新搜索", value: "retry" },
+            { name: chalk.dim("<- 返回模板选择方式"), value: "back" },
           ],
         },
       ]);
@@ -454,7 +459,7 @@ async function selectBySearch(): Promise<SelectedTemplate> {
     }
 
     console.log();
-    console.log(chalk.green.bold("🔍 搜索结果"));
+    console.log(chalk.bold("  搜索结果"));
     console.log(
       chalk.dim(
         `关键词: "${keyword}" • 找到 ${Object.keys(results).length} 个匹配模板`,
@@ -468,14 +473,11 @@ async function selectBySearch(): Promise<SelectedTemplate> {
           new RegExp(`(${keyword})`, "gi"),
           chalk.bgYellow.black("$1"),
         );
-      const ver =
-        t.version === "full"
-          ? chalk.green("[完整版]")
-          : chalk.yellow("[精简版]");
+      const ver = getVersionLabel(t.version);
       const info = t.features.slice(0, 2).join(" • ");
 
       return {
-        name: `${chalk.bold(hl(t.name.replace(/\s*(完整版|精简版)\s*$/, "")))} ${ver}\n   ${chalk.dim(hl(t.description))}\n   ${chalk.dim(`${info} • key: ${key}`)}\n   ${chalk.dim("─".repeat(60))}`,
+        name: `${chalk.bold(hl(t.name.replace(STRIP_VERSION_RE, "")))} ${ver}\n   ${chalk.dim(hl(t.description))}\n   ${chalk.dim(`${info} • key: ${key}`)}\n   ${chalk.dim("─".repeat(60))}`,
         value: { key, ...t },
         short: t.name,
       };
@@ -483,8 +485,8 @@ async function selectBySearch(): Promise<SelectedTemplate> {
 
     choices.push(
       { name: chalk.dim("━".repeat(70)), value: "separator", disabled: true },
-      { name: "🔍 重新搜索", value: "search_again" },
-      { name: "⬅️  返回模板选择方式", value: "back_to_mode" },
+      { name: "重新搜索", value: "search_again" },
+      { name: chalk.dim("<- 返回模板选择方式"), value: "back_to_mode" },
     );
 
     const { selectedTemplate } = await inquirer.prompt<{
@@ -513,8 +515,8 @@ async function selectFromAll(): Promise<SelectedTemplate> {
   const allTemplates = getAllTemplates();
 
   console.log();
-  console.log(chalk.blue.bold("📋 所有可用模板"));
-  console.log(chalk.dim(`共 ${Object.keys(allTemplates).length} 个模板可选`));
+  console.log(chalk.bold("  所有可用模板"));
+  console.log(chalk.dim(`  共 ${Object.keys(allTemplates).length} 个模板可选`));
   console.log();
 
   const categorizedChoices: object[] = [];
@@ -529,12 +531,9 @@ async function selectFromAll(): Promise<SelectedTemplate> {
     for (const [_sKey, stack] of Object.entries(category.stacks)) {
       for (const _pattern of Object.values(stack.patterns)) {
         for (const [key, t] of Object.entries(_pattern.templates)) {
-          const ver =
-            t.version === "full"
-              ? chalk.green("[完整版]")
-              : chalk.yellow("[精简版]");
+          const ver = getVersionLabel(t.version);
           categorizedChoices.push({
-            name: `  ● ${chalk.bold(t.name.replace(/\s*(完整版|精简版)\s*$/, ""))} ${ver} - ${chalk.dim(t.description)}\n     ${chalk.dim(`技术栈: ${stack.name} • 命令: robot create my-app -t ${key}`)}`,
+            name: `  ● ${chalk.bold(t.name.replace(STRIP_VERSION_RE, ""))} ${ver} - ${chalk.dim(t.description)}\n     ${chalk.dim(`技术栈: ${stack.name} • 命令: robot create my-app -t ${key}`)}`,
             value: { key, ...t },
             short: t.name,
           });
@@ -550,7 +549,7 @@ async function selectFromAll(): Promise<SelectedTemplate> {
 
   categorizedChoices.push(
     { name: chalk.dim("━".repeat(70)), value: "separator", disabled: true },
-    { name: chalk.dim("⬅️  返回模板选择方式"), value: "back_to_mode" },
+    { name: chalk.dim("<- 返回模板选择方式"), value: "back_to_mode" },
   );
 
   const { selectedTemplate } = await inquirer.prompt<{
@@ -576,7 +575,7 @@ async function configureProject(
   options: CreateOptions,
 ): Promise<ProjectConfig> {
   console.log();
-  console.log(chalk.blue("⚙️  项目配置"));
+  console.log(chalk.bold("  项目配置"));
   console.log();
 
   const available = detectPackageManager();
@@ -662,21 +661,21 @@ async function configureProject(
         name: "action",
         message: "请选择操作:",
         choices: [
-          { name: "🔄 重新配置", value: "reconfigure" },
-          { name: "❌ 取消创建", value: "cancel" },
+          { name: "重新配置", value: "reconfigure" },
+          { name: "取消创建", value: "cancel" },
         ],
       },
     ]);
 
     if (action === "reconfigure") return await configureProject(options);
-    console.log(chalk.yellow("❌ 取消创建项目"));
+    console.log(chalk.yellow("取消创建项目"));
     process.exit(0);
   }
 
   return config as unknown as ProjectConfig;
 }
 
-// ── Confirm ──────────────────────────────────────────────────────
+// ── Confirm ────────────────────────────────────────────────────────────
 
 async function confirmCreation(
   projectName: string,
@@ -684,7 +683,7 @@ async function confirmCreation(
   config: ProjectConfig,
 ): Promise<void> {
   console.log();
-  console.log(chalk.blue("📋 项目创建信息确认:"));
+  console.log(chalk.bold("  项目创建信息确认:"));
   console.log();
   console.log(`  项目名称: ${chalk.cyan(projectName)}`);
   console.log(`  选择模板: ${chalk.cyan(template.name)}`);
@@ -714,7 +713,7 @@ async function confirmCreation(
   ]);
 
   if (!confirmed) {
-    console.log(chalk.yellow("❌ 取消创建"));
+    console.log(chalk.yellow("取消创建"));
     process.exit(0);
   }
 }
@@ -813,9 +812,9 @@ async function executeCreation(
     spinner.succeed(chalk.green("🎉 项目创建成功!"));
 
     console.log();
-    console.log(chalk.green("🎉 项目创建完成!"));
+    console.log(chalk.green("项目创建完成!"));
     console.log();
-    console.log(chalk.blue("📁 项目信息:"));
+    console.log(chalk.blue("项目信息:"));
     console.log(`   位置: ${chalk.cyan(projectPath)}`);
     console.log(`   模板: ${chalk.cyan(template.name)}`);
     console.log(
@@ -825,7 +824,7 @@ async function executeCreation(
       `   依赖安装: ${config.installDeps ? chalk.green("已完成") : chalk.dim("需手动安装")}`,
     );
     console.log();
-    console.log(chalk.blue("🚀 快速开始:"));
+    console.log(chalk.blue("快速开始:"));
     console.log(chalk.cyan(`   cd ${projectName}`));
 
     const pm = config.packageManager || "bun";
@@ -854,7 +853,7 @@ async function executeCreation(
     }
   } catch (error) {
     if (tempPath) await fs.remove(tempPath).catch(() => {});
-    spinner.fail("创建项目失败");
+    if (spinner.isSpinning) spinner.fail("创建项目失败");
     throw error;
   }
 }

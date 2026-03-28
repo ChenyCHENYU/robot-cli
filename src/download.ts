@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import os from "node:os";
+import chalk from "chalk";
 import extract from "extract-zip";
 import type { TemplateConfig, DownloadOptions, CacheIndex } from "./types";
 import { CACHE_DIR_NAME } from "./config";
@@ -66,7 +67,7 @@ async function getCachedTemplate(repoUrl: string): Promise<string | null> {
   return null;
 }
 
-async function saveToCache(repoUrl: string, sourcePath: string): Promise<void> {
+async function saveToCache(repoUrl: string, sourcePath: string, branch = "main"): Promise<void> {
   try {
     const key = getCacheKey(repoUrl);
     const cachePath = path.join(CACHE_DIR, key);
@@ -79,7 +80,7 @@ async function saveToCache(repoUrl: string, sourcePath: string): Promise<void> {
     index.entries[key] = {
       repoUrl,
       downloadedAt: new Date().toISOString(),
-      branch: "main",
+      branch,
       size: stat.size,
     };
     await saveCacheIndex(index);
@@ -140,7 +141,7 @@ async function tryDownload(
 
       const response = await fetch(downloadUrl, {
         signal: AbortSignal.timeout(isOriginal ? 15_000 : 10_000),
-        headers: { "User-Agent": "Robot-CLI/2.0.0" },
+        headers: { "User-Agent": "Robot-CLI" },
       });
 
       if (!response.ok) {
@@ -230,7 +231,7 @@ export async function downloadTemplate(
 
     // Save to cache (async, non-blocking)
     if (!noCache) {
-      saveToCache(template.repoUrl, sourcePath).catch(() => {});
+      saveToCache(template.repoUrl, sourcePath, branch).catch(() => {});
     }
 
     if (spinner) spinner.text = `🎉 模板下载完成 (via ${sourceName})`;
@@ -244,9 +245,7 @@ export async function downloadTemplate(
       if (cached) {
         if (spinner) spinner.text = "📦 网络不可用，使用缓存模板...";
         console.log();
-        console.log(
-          `  ${import("chalk").then((c) => c.default.yellow("⚠️  使用缓存版本（非最新）"))}`,
-        );
+        console.log(`  ${chalk.yellow("⚠️  使用缓存版本（非最新）")}`);
         return cached;
       }
     }
@@ -263,10 +262,14 @@ export async function downloadTemplate(
       // ignore
     }
 
-    let msg = `模板下载失败: ${(downloadError as Error).message}`;
-    if ((downloadError as NodeJS.ErrnoException).code === "ENOTFOUND") {
-      msg +=
-        "\n\n💡 建议:\n1. 检查网络连接\n2. 如果在国内，尝试使用科学上网\n3. 稍后重试";
+    const errMsg = (downloadError as Error).message;
+    const isTimeout = errMsg.includes("aborted") || errMsg.includes("timeout") || (downloadError as Error).name === "TimeoutError";
+    let msg = `模板下载失败: ${errMsg}`;
+
+    if (isTimeout) {
+      msg += "\n\n💡 建议:\n1. 当前网络连接较慢，请稍后重试\n2. 如果在国内，尝试使用科学上网或配置代理\n3. 使用 --no-cache 强制重新下载";
+    } else if ((downloadError as NodeJS.ErrnoException).code === "ENOTFOUND") {
+      msg += "\n\n💡 建议:\n1. 检查网络连接\n2. 如果在国内，尝试使用科学上网\n3. 稍后重试";
     }
     throw new Error(msg);
   }

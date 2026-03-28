@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
-import boxen from "boxen";
+import gradient from "gradient-string";
 import inquirer from "inquirer";
 import { Command } from "commander";
 import { createProject } from "./create";
@@ -14,6 +14,7 @@ import {
   getCategoryForTemplate,
 } from "./templates";
 import { checkForUpdates } from "./utils";
+import { VERSION_LABELS } from "./config";
 import type { CreateOptions } from "./types";
 
 // ── Version ──────────────────────────────────────────────────────
@@ -25,9 +26,9 @@ function getPackageVersion(): string {
     const pkg = JSON.parse(
       readFileSync(join(__dirname, "..", "package.json"), "utf8"),
     );
-    return pkg.version || "2.0.0";
+    return pkg.version || "0.0.0";
   } catch {
-    return "2.0.0";
+    return "0.0.0";
   }
 }
 
@@ -35,25 +36,23 @@ const VERSION = getPackageVersion();
 
 // ── Welcome Banner ───────────────────────────────────────────────
 
+const robotGradient = gradient(["#36d1dc", "#5b86e5"]);
+
 function showWelcome(): void {
-  const banner = boxen(
-    [
-      "",
-      chalk.bold.cyan("  🤖  R O B O T  -  C L I  "),
-      "",
-      chalk.dim(`  v${VERSION} — 工程化项目脚手架`),
-      "",
-      chalk.dim("  快速创建标准化前端/后端/移动端/桌面端项目"),
-      "",
-    ].join("\n"),
-    {
-      padding: 1,
-      margin: { top: 1, bottom: 1, left: 2, right: 2 },
-      borderStyle: "round",
-      borderColor: "cyan",
-    },
-  );
-  console.log(banner);
+  const bannerLines = [
+    "  ╔══════════════════════════════════════════════════╗",
+    "  ║                                                  ║",
+    "  ║         R  O  B  O  T      C  L  I              ║",
+    "  ║                                                  ║",
+    "  ╚══════════════════════════════════════════════════╝",
+  ].join("\n");
+
+  console.log();
+  console.log(robotGradient.multiline(bannerLines));
+  console.log();
+  console.log(chalk.gray(`      v${VERSION}  ·  工程化项目脚手架`));
+  console.log(chalk.gray("      前端 · 后端 · 移动端 · 桌面端"));
+  console.log();
 }
 
 // ── Main Menu ────────────────────────────────────────────────────
@@ -64,7 +63,7 @@ async function showMainMenu(): Promise<void> {
 
   console.log(
     chalk.dim(
-      `  📦 ${count} 个模板可用 • Node ${process.version} • v${VERSION}`,
+      `  ${count} 个模板可用  ·  Node ${process.version}  ·  v${VERSION}`,
     ),
   );
   console.log();
@@ -76,23 +75,23 @@ async function showMainMenu(): Promise<void> {
       message: "请选择操作:",
       choices: [
         {
-          name: `🚀 ${chalk.bold("创建新项目")}  ${chalk.dim("— 选择模板创建项目")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("创建新项目")}  ${chalk.dim("— 选择模板创建项目")}`,
           value: "create",
         },
         {
-          name: `📋 ${chalk.bold("查看模板列表")}  ${chalk.dim("— 浏览所有可用模板")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("查看模板列表")}  ${chalk.dim("— 浏览所有可用模板")}`,
           value: "list",
         },
         {
-          name: `🔍 ${chalk.bold("搜索模板")}  ${chalk.dim("— 按关键词搜索模板")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("搜索模板")}  ${chalk.dim("— 按关键词搜索模板")}`,
           value: "search",
         },
         {
-          name: `🏥 ${chalk.bold("环境诊断")}  ${chalk.dim("— 检查开发环境")}`,
+          name: `${chalk.cyan(">")} ${chalk.bold("环境诊断")}  ${chalk.dim("— 检查开发环境")}`,
           value: "doctor",
         },
         { name: chalk.dim("─".repeat(50)), value: "sep", disabled: true },
-        { name: `❌ ${chalk.dim("退出")}`, value: "exit" },
+        { name: `${chalk.dim("  退出")}`, value: "exit" },
       ],
     },
   ]);
@@ -111,7 +110,7 @@ async function showMainMenu(): Promise<void> {
       await runDoctor();
       break;
     case "exit":
-      console.log(chalk.dim("👋 再见!"));
+      console.log(chalk.dim("  再见!"));
       process.exit(0);
   }
 }
@@ -120,7 +119,7 @@ async function showMainMenu(): Promise<void> {
 
 function showTemplateList(recommended: boolean): void {
   const templates = recommended ? getRecommendedTemplates() : getAllTemplates();
-  const title = recommended ? "🎯 推荐模板" : "📋 所有模板";
+  const title = recommended ? "推荐模板" : "所有模板";
   const entries = Object.entries(templates);
 
   console.log();
@@ -129,10 +128,11 @@ function showTemplateList(recommended: boolean): void {
   console.log();
 
   for (const [key, t] of entries) {
-    const ver =
-      t.version === "full" ? chalk.green("[完整版]") : chalk.yellow("[精简版]");
+    const ver = VERSION_LABELS[t.version]
+      ? (t.version === "full" ? chalk.green : t.version === "micro" ? chalk.blue : chalk.yellow)(`[${VERSION_LABELS[t.version]}]`)
+      : chalk.dim(`[${t.version}]`);
     const cat = getCategoryForTemplate(key);
-    const catLabel = cat ? chalk.dim(`[${cat}]`) : "";
+    const catLabel = cat ? chalk.dim(`[${cat.name}]`) : "";
 
     console.log(`  ${chalk.bold(t.name)} ${ver} ${catLabel}`);
     console.log(`  ${chalk.dim(t.description)}`);
@@ -164,21 +164,45 @@ function showSearchResults(keyword: string): void {
   console.log();
 
   if (entries.length === 0) {
-    console.log(chalk.yellow(`🔍 没有找到「${keyword}」相关模板`));
+    console.log(chalk.yellow(`没有找到「${keyword}」相关模板`));
     console.log();
     return;
   }
 
-  console.log(chalk.green.bold(`🔍 搜索结果: "${keyword}"`));
+  console.log(chalk.green.bold(`搜索结果: "${keyword}"`));
   console.log(chalk.dim(`找到 ${entries.length} 个匹配`));
   console.log();
 
   for (const [key, t] of entries) {
-    const ver =
-      t.version === "full" ? chalk.green("[完整版]") : chalk.yellow("[精简版]");
+    const ver = VERSION_LABELS[t.version]
+      ? (t.version === "full" ? chalk.green : t.version === "micro" ? chalk.blue : chalk.yellow)(`[${VERSION_LABELS[t.version]}]`)
+      : chalk.dim(`[${t.version}]`);
     console.log(`  ${chalk.bold(t.name)} ${ver}`);
     console.log(`  ${chalk.dim(t.description)}`);
     console.log(`  ${chalk.dim(`robot create my-app -t ${key}`)}`);
+    console.log();
+  }
+}
+
+// ── Update Check ─────────────────────────────────────────────────
+
+async function notifyUpdate(): Promise<void> {
+  const newVersion = await checkForUpdates(
+    "@agile-team/robot-cli",
+    VERSION,
+  ).catch(() => null);
+  if (newVersion) {
+    console.log();
+    console.log(
+      chalk.yellow(
+        `  ┌─ 发现新版本: ${chalk.dim(VERSION)} → ${chalk.bold.green(newVersion)}`,
+      ),
+    );
+    console.log(
+      chalk.yellow(
+        `  └─ 更新命令:  ${chalk.cyan("bun add -g @agile-team/robot-cli")}`,
+      ),
+    );
     console.log();
   }
 }
@@ -190,7 +214,7 @@ export async function main(): Promise<void> {
 
   program
     .name("robot")
-    .description("🤖 Robot CLI - 工程化项目脚手架")
+    .description("Robot CLI - 工程化项目脚手架")
     .version(VERSION, "-v, --version");
 
   program
@@ -204,7 +228,7 @@ export async function main(): Promise<void> {
     .action(async (projectName: string | undefined, opts: CreateOptions) => {
       showWelcome();
       await createProject(projectName, opts);
-      checkForUpdates("@agile-team/robot-cli", VERSION).catch(() => {});
+      await notifyUpdate();
     });
 
   program

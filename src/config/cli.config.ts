@@ -8,6 +8,13 @@ export const REMOTE_REGISTRY_URL =
 /** 模板缓存目录名（位于 ~/.robot-cli/ 下） */
 export const CACHE_DIR_NAME = "cache";
 
+/** 版本标签映射 */
+export const VERSION_LABELS: Record<string, string> = {
+  full: "完整版",
+  base: "精简版",
+  micro: "微服务版",
+};
+
 /** 推荐模板 key 列表 */
 export const RECOMMENDED_TEMPLATE_KEYS = [
   "robot-admin",
