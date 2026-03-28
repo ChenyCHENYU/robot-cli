@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.3] - 2026-03-29
+
+### Fixed
+
+- **根治下载超时的真正根因** — `AbortSignal.timeout(ms)` 是总时限（含 body 流式下载），大文件（10-20MB）在国内网络 30 秒内根本下不完，必然中断
+  - 改用 `AbortController` + 手动 `clearTimeout`：只对"连接建立/收到响应头"计时（30s），一旦连接成功立即取消计时器，body 流式下载不再受任何时间限制
+  - 与 v1.x 的 `node-fetch` `timeout` 行为完全一致（活跃超时，而非总时限）
+
 ## [3.0.2] - 2026-03-29
 
 ### Fixed

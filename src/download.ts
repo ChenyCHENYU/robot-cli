@@ -212,22 +212,33 @@ function buildDownloadSources(repoUrl: string, branch: string, giteeUrl?: string
 
 async function fetchWithRetry(
   downloadUrl: string,
-  timeout: number,
+  connectionTimeoutMs: number,
   retries: number,
   extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // 使用 AbortController 手动管理超时，而不是 AbortSignal.timeout()
+    // 关键区别：AbortSignal.timeout() 是总时限（含下载 body），会在大文件下载中途强制中断
+    // 我们的方案：只对"建立连接/收到响应头"计时，一旦连接成功立即 clearTimeout
+    // 这与 node-fetch 的 timeout 行为一致（活跃超时，不限制流式下载时长）
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), connectionTimeoutMs);
+
     try {
       const response = await fetch(downloadUrl, {
-        signal: AbortSignal.timeout(timeout),
+        signal: controller.signal,
         redirect: "follow",
         headers: {
           "User-Agent": "Robot-CLI/3.0",
           ...extraHeaders,
         },
       });
+
+      // 连接成功、响应头已收到 — 立即取消超时计时器
+      // body 流式下载不再受任何时间限制，可以自由下载大文件
+      clearTimeout(timer);
 
       if (!response.ok) {
         if (response.status === 404) throw new Error(`仓库不存在 (404)`);
@@ -242,6 +253,7 @@ async function fetchWithRetry(
 
       return response;
     } catch (error) {
+      clearTimeout(timer); // 异常时也确保清理计时器
       lastError = error as Error;
 
       // 404 不重试
