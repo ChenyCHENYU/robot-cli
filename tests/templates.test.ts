@@ -39,7 +39,7 @@ describe("searchTemplates", () => {
   });
 
   it("should find templates by feature keyword", () => {
-    const results = searchTemplates("typescript");
+    const results = searchTemplates("JWT");
     expect(Object.keys(results).length).toBeGreaterThan(0);
   });
 

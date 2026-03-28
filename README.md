@@ -55,7 +55,7 @@ npx @agile-team/robot-cli create my-project
 
 | 模板 Key | 名称 | 架构模式 | 说明 |
 |---------|------|---------|------|
-| `robot-admin` | Robot Admin 完整版 | 单体应用 | 30+ 完整示例、权限管理、图表组件、Naive UI |
+| `robot-admin` | Robot Admin 完整版 | 单体应用 | 50+ 完整示例、权限管理、图表组件、Naive UI |
 | `robot-admin-base` | Robot Admin 精简版 | 单体应用 | 基础架构、核心功能、快速启动 |
 | `robot-monorepo` | Robot Monorepo | Monorepo | bun workspace 多包管理架构 |
 | `robot-micro-app` | Robot MicroApp | 微前端 | 基于 MicroApp 的微前端方案 |
@@ -77,8 +77,6 @@ npx @agile-team/robot-cli create my-project
 |---------|------|------|
 | `robot-uniapp` | Robot uni-app 完整版 | 多端适配（小程序/H5/App）+ 完整示例 |
 | `robot-uniapp-base` | Robot uni-app 精简版 | 基础框架 + 核心功能 |
-| `robot-taro` | Robot Taro 完整版 | 原生性能 + 跨平台（🔜 筹备中） |
-| `robot-taro-base` | Robot Taro 精简版 | 基础 Taro 框架（🔜 筹备中） |
 
 ### 🚀 后端项目
 
@@ -87,8 +85,6 @@ npx @agile-team/robot-cli create my-project
 | `robot-nest` | Robot NestJS 完整版 | TypeORM + JWT + Swagger + Redis |
 | `robot-nest-base` | Robot NestJS 精简版 | 基础 NestJS + 核心模块 |
 | `robot-nest-micro` | Robot NestJS 微服务 | gRPC + 服务发现 |
-| `robot-koa` | Robot Koa3 完整版 | TypeScript + JWT + MySQL |
-| `robot-koa-base` | Robot Koa3 精简版 | 基础 Koa3 + 核心中间件 |
 
 ### 💻 桌面端项目
 
@@ -96,8 +92,6 @@ npx @agile-team/robot-cli create my-project
 |---------|------|------|
 | `robot-electron` | Robot Electron 完整版 | Vue3 + Electron + 自动更新 |
 | `robot-electron-base` | Robot Electron 精简版 | 基础 Electron + Vue 框架 |
-| `robot-tauri` | Robot Tauri 完整版 | Rust 后端 + Vue 前端 + 原生性能 |
-| `robot-tauri-base` | Robot Tauri 精简版 | 基础 Tauri + Vue 框架 |
 
 ---
 
@@ -168,7 +162,7 @@ robot doctor --clear-cache  # 清理模板缓存
 | 🥇 | **bun** | 极速安装，现代化 |
 | 🥈 | **pnpm** | 快速安装，节省磁盘 |
 | 🥉 | **yarn** | 兼容性好 |
-| 4 | **npm** | Node.js 内置 |
+| 4️⃣ | **npm** | Node.js 内置 |
 
 ### 离线缓存
 
@@ -202,10 +196,14 @@ robot create my-app --from https://gitee.com/your-org/your-template
 robot-cli/
 ├── bin/robot.js            # CLI 入口（thin shim）
 ├── src/                    # TypeScript 源码
+│   ├── config/             # 配置层（模板定义 & CLI 配置）
+│   │   ├── index.ts        # 配置统一导出
+│   │   ├── templates.config.ts  # 模板注册表
+│   │   └── cli.config.ts   # CLI 品牌 & 运行时配置
 │   ├── index.ts            # 主入口 & Commander 命令注册
 │   ├── create.ts           # 交互式创建流程
 │   ├── download.ts         # 模板下载 & 缓存管理
-│   ├── templates.ts        # 内置模板注册表
+│   ├── templates.ts        # 模板查询 & 远程注册
 │   ├── doctor.ts           # 环境诊断
 │   ├── utils.ts            # 工具函数
 │   └── types.ts            # 类型定义
@@ -251,7 +249,7 @@ robot create test-app
 
 ### 3. 添加新模板
 
-编辑 `src/templates.ts`，在对应分类下新增：
+编辑 `src/config/templates.config.ts`，在对应分类下新增：
 
 ```ts
 "robot-your-template": {

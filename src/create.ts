@@ -12,6 +12,7 @@ import {
   searchTemplates,
   getRecommendedTemplates,
 } from "./templates";
+import { START_COMMAND_MAP } from "./config";
 import {
   validateProjectName,
   copyTemplate,
@@ -913,29 +914,6 @@ function initializeGitRepository(projectPath: string): void {
 }
 
 function getStartCommand(template: SelectedTemplate, pm: string): string {
-  const map: Record<string, string> = {
-    "robot-admin": "dev",
-    "robot-admin-base": "dev",
-    "robot-monorepo": "dev",
-    "robot-micro-app": "dev",
-    "robot-module-federation": "dev",
-    "robot-react": "start",
-    "robot-react-base": "start",
-    "robot-uniapp": "dev:h5",
-    "robot-uniapp-base": "dev:h5",
-    "robot-taro": "dev:weapp",
-    "robot-taro-base": "dev:weapp",
-    "robot-nest": "start:dev",
-    "robot-nest-base": "start:dev",
-    "robot-nest-micro": "start:dev",
-    "robot-koa": "dev",
-    "robot-koa-base": "dev",
-    "robot-electron": "electron:dev",
-    "robot-electron-base": "electron:dev",
-    "robot-tauri": "tauri dev",
-    "robot-tauri-base": "tauri dev",
-  };
-
-  const script = map[template.key] || "dev";
+  const script = START_COMMAND_MAP[template.key] || "dev";
   return `${pm} run ${script}`;
 }

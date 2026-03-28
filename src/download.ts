@@ -3,9 +3,10 @@ import path from "node:path";
 import os from "node:os";
 import extract from "extract-zip";
 import type { TemplateConfig, DownloadOptions, CacheIndex } from "./types";
+import { CACHE_DIR_NAME } from "./config";
 
 // ── Cache constants ──────────────────────────────────────────────
-const CACHE_DIR = path.join(os.homedir(), ".robot-cli", "cache");
+const CACHE_DIR = path.join(os.homedir(), ".robot-cli", CACHE_DIR_NAME);
 const CACHE_INDEX_PATH = path.join(CACHE_DIR, "index.json");
 
 // ── URL Builders ─────────────────────────────────────────────────
