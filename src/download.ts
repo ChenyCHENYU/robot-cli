@@ -119,12 +119,15 @@ interface DownloadResult {
 }
 
 /** GitHub 镜像列表 — 按可用性排序 */
-function getGitHubMirrors(repoUrl: string): string[] {
-  return [
-    repoUrl,                                        // 1. 原始 GitHub
-    repoUrl.replace("github.com", "hub.gitmirror.com"),  // 2. gitmirror
-    `https://ghproxy.net/${repoUrl}`,               // 3. ghproxy.net
+function getGitHubMirrors(repoUrl: string, giteeUrl?: string): string[] {
+  const mirrors = [
+    repoUrl,                                              // 1. 原始 GitHub
+    repoUrl.replace("github.com", "hub.gitmirror.com"),   // 2. gitmirror
+    `https://ghproxy.net/${repoUrl}`,                     // 3. ghproxy.net
   ];
+  // 4. Gitee 备用源 (国内优先)
+  if (giteeUrl) mirrors.push(giteeUrl);
+  return mirrors;
 }
 
 async function fetchWithRetry(
@@ -167,11 +170,12 @@ async function tryDownload(
   repoUrl: string,
   branch = "main",
   spinner?: import("ora").Ora,
+  giteeUrl?: string,
 ): Promise<DownloadResult> {
   const url = new URL(repoUrl);
   const host = url.hostname;
 
-  const mirrors = host === "github.com" ? getGitHubMirrors(repoUrl) : [repoUrl];
+  const mirrors = host === "github.com" ? getGitHubMirrors(repoUrl, giteeUrl) : [repoUrl];
 
   for (let i = 0; i < mirrors.length; i++) {
     const current = mirrors[i];
@@ -218,11 +222,12 @@ async function tryDownload(
  * Download template — always fetches latest, caches for offline fallback.
  */
 export async function downloadTemplate(
-  template: Pick<TemplateConfig, "repoUrl" | "branch">,
+  template: Pick<TemplateConfig, "repoUrl" | "branch" | "giteeUrl">,
   options: DownloadOptions = {},
 ): Promise<string> {
-  const { spinner, noCache } = options;
+  const { spinner, noCache, giteeUrl: optGiteeUrl } = options;
   const branch = template.branch || "main";
+  const giteeUrl = optGiteeUrl || template.giteeUrl;
 
   if (!template?.repoUrl) {
     throw new Error(`模板配置无效: ${JSON.stringify(template)}`);
@@ -236,16 +241,46 @@ export async function downloadTemplate(
       template.repoUrl,
       branch,
       spinner,
+      giteeUrl,
     );
 
+    // ── Download with progress bar ─────────────────────────────
     if (spinner) spinner.text = "保存下载文件...";
 
     const timestamp = Date.now();
     const tempZip = path.join(os.tmpdir(), `robot-template-${timestamp}.zip`);
     const tempExtract = path.join(os.tmpdir(), `robot-extract-${timestamp}`);
 
-    const buffer = Buffer.from(await response.arrayBuffer());
-    await fs.writeFile(tempZip, buffer);
+    const contentLength = response.headers.get("content-length");
+    const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
+
+    if (totalSize > 0 && response.body && spinner) {
+      // Stream download with progress bar
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+
+        const pct = Math.round((received / totalSize) * 100);
+        const filled = Math.round(pct / 5);
+        const bar = "\u2588".repeat(filled) + "\u2591".repeat(20 - filled);
+        const sizeMB = (received / 1024 / 1024).toFixed(1);
+        const totalMB = (totalSize / 1024 / 1024).toFixed(1);
+        spinner.text = `下载中 [${bar}] ${pct}% ${sizeMB}MB/${totalMB}MB (${sourceName})`;
+      }
+
+      const buffer = Buffer.concat(chunks);
+      await fs.writeFile(tempZip, buffer);
+    } else {
+      // Fallback: no content-length, download without progress
+      const buffer = Buffer.from(await response.arrayBuffer());
+      await fs.writeFile(tempZip, buffer);
+    }
 
     if (spinner) spinner.text = "解压模板文件...";
     await extract(tempZip, { dir: tempExtract });

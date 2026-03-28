@@ -8,6 +8,7 @@ export interface TemplateConfig {
   name: string;
   description: string;
   repoUrl: string;
+  giteeUrl?: string;
   branch?: string;
   features: string[];
   version: "full" | "base" | "micro";
@@ -62,6 +63,7 @@ export interface ProjectStats {
 export interface DownloadOptions {
   spinner?: Ora;
   noCache?: boolean;
+  giteeUrl?: string;
 }
 
 // ── Cache ────────────────────────────────────────────────────────

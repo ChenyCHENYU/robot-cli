@@ -1,6 +1,6 @@
 # Robot CLI — 迭代分析 & 路线图
 
-> 最后更新: 2026-03-28 (v2.3.0)
+> 最后更新: 2026-03-28 (v3.0.0)
 
 ---
 
@@ -15,7 +15,7 @@
 | 多包管理器支持 | 完成 | bun > pnpm > yarn > npm 自动检测 |
 | 分支下载 | 完成 | 同仓库不同分支 = 不同架构模板 |
 | 离线缓存 | 完成 | ~/.robot-cli/cache/ 自动缓存，网络异常回退 |
-| 重试 + 多镜像 | 完成 (v2.3) | 3 个镜像源，每个重试 3 次，指数退避 |
+| 重试 + 多镜像 + Gitee 备用源 | 完成 (v2.3+v3.0) | 3 个镜像源 + Gitee 备用源，每个重试 3 次，指数退避 |
 | --from 自定义仓库 | 完成 | 支持 GitHub/Gitee/GitLab |
 | --dry-run 预览 | 完成 | 不实际创建，展示执行计划 |
 | robot doctor 诊断 | 完成 | Node/Git/包管理器/网络/缓存 |
@@ -24,10 +24,11 @@
 | 单元测试 | 完成 | 33 个测试，覆盖校验/模板/下载 |
 | TypeScript | 完成 | strict 模式，完整类型 |
 
-### 综合完成度: ~75%
+### 综合完成度: ~85%
 
 > 作为 **"模板下载型"** 脚手架，核心链路已完整可用。
-> 距离社区顶级工具 (create-vue / create-vite) 的差距主要在 **模板生成模式** 和 **交互体验库**。
+> v3.0 已迁移到 @clack/prompts 现代化 UI，增加下载进度条和 Gitee 备用源。
+> 距离社区顶级工具 (create-vue / create-vite) 的差距主要在 **模板生成模式** 和 **后置配置系统**。
 
 ---
 
@@ -41,8 +42,8 @@
 | **定制粒度** | 选择完整/精简版 | 逐项 toggle (TS/Router/Pinia/ESLint...) | 选框架+变体 |
 | **模板存储** | 远程 GitHub 仓库 | 内置在包里 (template/) | 内置在包里 |
 | **离线可用** | 有缓存回退 | 完全离线 (模板随包分发) | 完全离线 |
-| **交互库** | inquirer | @clack/prompts | @clack/prompts |
-| **UI 风格** | 传统 list 选择 | 现代 confirm/select | 现代 confirm/select |
+| **交互库** | @clack/prompts (v3.0) | @clack/prompts | @clack/prompts |
+| **UI 风格** | 现代化 confirm/select | 现代 confirm/select | 现代 confirm/select |
 | **包体积** | ~22KB (gz) | ~270KB (gz, 含所有模板) | ~35KB (gz) |
 | **网络依赖** | 创建时必须联网(或有缓存) | 零网络依赖 | 零网络依赖 |
 | **更新机制** | 用户 npm update | 用户 npm update | 用户 npm update |
@@ -88,9 +89,9 @@ template/
 > 比如下载 robot-admin 后，询问「是否需要权限模块？是否需要图表组件？」然后删除不需要的模块。
 > 这样既保持远程模板的灵活更新，又提供了定制能力。
 
-#### 2. inquirer vs @clack/prompts
+#### 2. inquirer vs @clack/prompts (v3.0 已完成迁移)
 
-| 维度 | inquirer (当前) | @clack/prompts (create-vue) |
+| 维度 | inquirer (v2.x) | @clack/prompts (v3.0 当前) |
 |------|---------------|---------------------------|
 | UI 风格 | 传统命令行列表 | 现代化，带框线和颜色 |
 | Windows 兼容 | 好 | 好 |
@@ -98,9 +99,9 @@ template/
 | 维护状态 | 成熟稳定 | 活跃 |
 | API 风格 | 配置对象 | 函数式 |
 
-**迁移成本**: 中等。需要重写所有 prompt 调用，但逻辑不变。  
+**迁移成本**: 中等。已在 v3.0 完成重写所有 prompt 调用。  
 **迁移收益**: 视觉效果显著提升，包体积减小。  
-**建议**: v3.0 的主要变更之一。
+**状态**: ✅ 已完成 (v3.0)
 
 #### 3. 远程模板 vs 内置模板
 
@@ -161,40 +162,24 @@ template/
 [NO] robot-nest-micro  github.com/ChenyCHENYU/Robot_Nest_Micro (404)
 ```
 
-#### 3. 下载进度条
+#### 3. 下载进度条 (✅ v3.0 已完成)
 
-当前下载只有 spinner 旋转，无法感知进度。改为:
-
-```
-下载 robot-admin (github.com) [████████░░] 80% 2.1MB/2.6MB
-```
-
-### P1 — 中期 (v3.0)
-
-#### 4. 迁移到 @clack/prompts
-
-替换 inquirer，获得现代化交互 UI:
+已实现基于 content-length 的流式下载进度条:
 
 ```
-┌  Robot CLI v3.0
-│
-◇  项目名称
-│  my-awesome-app
-│
-◇  选择模板
-│  Robot Admin 完整版
-│
-◆  是否需要以下功能?
-│  ◼ 权限管理
-│  ◼ 图表组件
-│  ◻ 国际化
-│  ◻ Mock 数据
-│
-└  创建完成!
+下载中 [████████░░░░░░░░░░░░] 40% 1.0MB/2.6MB (github.com)
 ```
 
-**工作量**: ~3-5 天 (重写所有 prompt)  
-**Breaking**: 是，视觉体验完全不同
+### P1 — 中期 (v3.x)
+
+#### 4. 迁移到 @clack/prompts (✅ 已在 v3.0 完成)
+
+已替换 inquirer，获得现代化交互 UI。使用 `p.select`、`p.text`、`p.confirm`、`p.note`、`p.intro`/`p.outro` 等。
+
+同时实现:
+- Gitee 备用源 (国内用户 GitHub 不可达时自动切换)
+- 下载进度条 (基于 content-length 流式显示)
+- Banner 框框展示 (双线框 UI)
 
 #### 5. monorepo 子包创建
 
@@ -242,9 +227,9 @@ robot create --gui    # 打开浏览器可视化界面
 
 | 项目 | 严重度 | 说明 |
 |------|--------|------|
-| `config as unknown as ProjectConfig` | 低 | configureProject 中的不安全类型转换 |
+| `config as unknown as ProjectConfig` | 已修复 (v3.0) | configureProject 重写后不再需要不安全类型转换 |
 | `loadRemoteRegistry()` 未使用 | 低 | 已实现但从未调用，可删除或接入 |
-| inquirer 类型补丁 | 低 | `@types/inquirer` 与 v9 不完全匹配 |
+| inquirer 类型补丁 | 已修复 (v3.0) | 已移除 inquirer，使用 @clack/prompts |
 | 无集成测试 | 中 | 只有单元测试，缺少真实下载+创建的 E2E 测试 |
 | 无覆盖率报告 | 低 | 可加 vitest --coverage |
 

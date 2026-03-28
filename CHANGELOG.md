@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-03-28
+
+### ⚠️ BREAKING CHANGES
+
+- 交互界面从 `inquirer` 全面迁移至 `@clack/prompts`，视觉体验完全不同
+- 移除 `inquirer` 和 `@types/inquirer` 依赖
+
+### Added
+
+- **@clack/prompts 现代化 UI**：使用 `p.select`、`p.text`、`p.confirm`、`p.note`、`p.intro`/`p.outro` 等，交互体验对齐 create-vue
+- **Banner 框框展示**：双线框 `╔══╗` 样式包裹 ROBOT CLI 标题，信息分区更清晰
+- **下载进度条**：基于 `content-length` 的流式进度条 `[████████░░░░] 40% 1.0MB/2.6MB`
+- **Gitee 备用源**：模板配置新增 `giteeUrl` 字段，GitHub 不可达时自动切换 Gitee 下载
+  - robot-admin / monorepo / micro-app / module-federation → `gitee.com/ycyplus163/Robot_Admin`
+  - robot-uniapp → `gitee.com/ycyplus163/Robot_uniApp`
+- **取消操作支持**：所有交互步骤支持 Ctrl+C 优雅退出 (`p.isCancel`)
+
+### Changed
+
+- 主菜单、模板选择、项目配置、确认创建等全部替换为 @clack/prompts 组件
+- 项目创建完成信息使用 `p.note` 卡片式展示
+- 分类浏览流程简化：自动跳过只有单一选项的层级
+- 项目配置不再需要最后的"确认配置"步骤（逐项确认更自然）
+- 构建产物从 ~63KB 减小至 ~59KB
+
+### Removed
+
+- `inquirer` 依赖及其 `@types/inquirer` 类型定义
+- `getVersionLabel()` 辅助函数（改为内联 `VERSION_LABELS` 查找）
+
 ## [2.3.0] - 2026-03-28
 
 ### Fixed (Root-Cause)

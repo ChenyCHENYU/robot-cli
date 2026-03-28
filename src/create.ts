@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import chalk from "chalk";
-import inquirer from "inquirer";
+import * as p from "@clack/prompts";
 import ora from "ora";
 import { execSync } from "node:child_process";
 import { downloadTemplate } from "./download";
@@ -26,13 +26,6 @@ import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function getVersionLabel(version: string): string {
-  const label = VERSION_LABELS[version] || version;
-  if (version === "full") return chalk.green(`[${label}]`);
-  if (version === "micro") return chalk.blue(`[${label}]`);
-  return chalk.yellow(`[${label}]`);
-}
-
 const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
 
 // ── Main Entry ───────────────────────────────────────────────────
@@ -41,9 +34,7 @@ export async function createProject(
   projectName: string | undefined,
   options: CreateOptions = {},
 ): Promise<void> {
-  console.log();
-  console.log(chalk.cyan("  Robot CLI - 开始创建项目"));
-  console.log();
+  p.intro(chalk.bgCyan.black(" Robot CLI - 开始创建项目 "));
 
   // 1. Select template
   let template: SelectedTemplate;
@@ -117,21 +108,18 @@ async function handleProjectName(
   if (projectName) {
     const v = validateProjectName(projectName);
     if (!v.valid) {
-      console.log(chalk.red("项目名称不合法:"));
-      v.errors.forEach((e) => console.log(chalk.red(`   ${e}`)));
-      console.log();
+      p.log.error("项目名称不合法:");
+      v.errors.forEach((e) => p.log.warn(`  ${e}`));
 
-      const { newName } = await inquirer.prompt<{ newName: string }>([
-        {
-          type: "input",
-          name: "newName",
-          message: "请输入新的项目名称:",
-          validate: (input: string) => {
-            const r = validateProjectName(input);
-            return r.valid || r.errors[0];
-          },
+      const newName = await p.text({
+        message: "请输入新的项目名称:",
+        validate: (input) => {
+          if (!input) return "项目名称不能为空";
+          const r = validateProjectName(input);
+          return r.valid ? undefined : r.errors[0];
         },
-      ]);
+      });
+      if (p.isCancel(newName)) process.exit(0);
       return newName;
     }
     return projectName;
@@ -139,19 +127,18 @@ async function handleProjectName(
 
   const defaultName = generateDefaultProjectName(template);
 
-  const { name } = await inquirer.prompt<{ name: string }>([
-    {
-      type: "input",
-      name: "name",
-      message: "请输入项目名称:",
-      default: defaultName,
-      validate: (input: string) => {
-        if (!input.trim()) return "项目名称不能为空";
-        const r = validateProjectName(input);
-        return r.valid || r.errors[0];
-      },
+  const name = await p.text({
+    message: "请输入项目名称:",
+    defaultValue: defaultName,
+    placeholder: defaultName,
+    validate: (input) => {
+      if (!input?.trim()) return "项目名称不能为空";
+      const r = validateProjectName(input);
+      return r.valid ? undefined : r.errors[0];
     },
-  ]);
+  });
+
+  if (p.isCancel(name)) process.exit(0);
   return name;
 }
 
@@ -179,37 +166,17 @@ async function selectTemplate(
 }
 
 async function selectTemplateMethod(): Promise<SelectedTemplate> {
-  console.log();
-  console.log(chalk.bold("  选择模板创建方式"));
-  console.log(chalk.dim("  请选择最适合你的模板浏览方式"));
-  console.log();
+  const selectionMode = await p.select({
+    message: "模板选择方式:",
+    options: [
+      { value: "recommended", label: "推荐模板", hint: "基于团队使用频率推荐的热门模板" },
+      { value: "category", label: "分类浏览", hint: "前端、后端、移动端、桌面端分类" },
+      { value: "search", label: "关键词搜索", hint: "按技术栈、功能特性查找" },
+      { value: "all", label: "全部模板", hint: "查看所有可用模板" },
+    ],
+  });
 
-  const { selectionMode } = await inquirer.prompt<{ selectionMode: string }>([
-    {
-      type: "list",
-      name: "selectionMode",
-      message: "模板选择方式:",
-      choices: [
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("推荐模板")} ${chalk.dim("— 基于团队使用频率推荐的热门模板")}`,
-          value: "recommended",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("分类浏览")} ${chalk.dim("— 前端、后端、移动端、桌面端分类")}`,
-          value: "category",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("关键词搜索")} ${chalk.dim("— 按技术栈、功能特性查找")}`,
-          value: "search",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("全部模板")} ${chalk.dim("— 查看所有可用模板")}`,
-          value: "all",
-        },
-      ],
-      pageSize: 10,
-    },
-  ]);
+  if (p.isCancel(selectionMode)) process.exit(0);
 
   switch (selectionMode) {
     case "recommended":
@@ -231,281 +198,190 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
   const recommended = getRecommendedTemplates();
 
   if (Object.keys(recommended).length === 0) {
-    console.log(chalk.yellow("暂无推荐模板"));
+    p.log.warn("暂无推荐模板");
     return await selectTemplateMethod();
   }
 
-  console.log();
-  console.log(chalk.bold("  推荐模板"));
-  console.log(chalk.dim("  基于团队使用频率和项目成熟度推荐"));
-  console.log();
+  p.log.info(chalk.bold("推荐模板") + chalk.dim(" — 基于团队使用频率和项目成熟度推荐"));
 
-  const choices: object[] = [];
-  const entries = Object.entries(recommended);
+  const options: { value: string; label: string; hint?: string }[] = [];
 
-  entries.forEach(([key, template], index) => {
-    const tags = template.features
-      .slice(0, 3)
-      .map((f) => chalk.dim(`[${f}]`))
-      .join(" ");
-    const ver = getVersionLabel(template.version);
-
-    choices.push({
-      name: `${chalk.bold.white(template.name.replace(STRIP_VERSION_RE, ""))} ${ver} - ${chalk.dim(template.description)}\n   ${tags}${template.features.length > 3 ? chalk.dim(` +${template.features.length - 3}more`) : ""}`,
-      value: { key, ...template },
-      short: template.name,
+  for (const [key, template] of Object.entries(recommended)) {
+    const ver = VERSION_LABELS[template.version] || template.version;
+    const tags = template.features.slice(0, 3).join(", ");
+    options.push({
+      value: key,
+      label: `${template.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+      hint: `${template.description} | ${tags}`,
     });
+  }
 
-    if (index < entries.length - 1) {
-      choices.push({
-        name: chalk.dim("─".repeat(70)),
-        value: `sep_${index}`,
-        disabled: true,
-      });
-    }
+  options.push({ value: "back", label: "<- 返回选择其他方式" });
+
+  const selected = await p.select({
+    message: "选择推荐模板:",
+    options,
   });
 
-  choices.push({ name: chalk.dim("  <- 返回选择其他方式"), value: "back" });
+  if (p.isCancel(selected)) process.exit(0);
+  if (selected === "back") return await selectTemplateMethod();
 
-  const { selectedTemplate } = await inquirer.prompt<{
-    selectedTemplate: SelectedTemplate | string;
-  }>([
-    {
-      type: "list",
-      name: "selectedTemplate",
-      message: "选择推荐模板:",
-      choices,
-      pageSize: 15,
-      loop: false,
-    },
-  ]);
-
-  if (selectedTemplate === "back") return await selectTemplateMethod();
-  return selectedTemplate as SelectedTemplate;
+  const t = recommended[selected];
+  return { key: selected, ...t };
 }
 
 // ── Category selection ───────────────────────────────────────────
 
 async function selectByCategory(): Promise<SelectedTemplate> {
   while (true) {
-    const cat = await selectCategory();
-    if (cat === "back_to_method") return await selectTemplateMethod();
+    // Step 1: Select category
+    const catOptions = Object.entries(TEMPLATE_CATEGORIES).map(([key, c]) => ({
+      value: key,
+      label: c.name,
+    }));
+    catOptions.push({ value: "back_to_method", label: "<- 返回模板选择方式" });
 
-    const stack = await selectStack(cat);
-    if (stack === "back_to_category") continue;
-    if (stack === "back_to_method") return await selectTemplateMethod();
+    const catKey = await p.select({
+      message: "请选择项目类型:",
+      options: catOptions,
+    });
 
-    const pattern = await selectPattern(cat, stack);
-    if (pattern === "back_to_stack" || pattern === "back_to_category") continue;
-    if (pattern === "back_to_method") return await selectTemplateMethod();
+    if (p.isCancel(catKey)) process.exit(0);
+    if (catKey === "back_to_method") return await selectTemplateMethod();
 
-    const tpl = await selectSpecificTemplate(cat, stack, pattern);
-    if (typeof tpl === "string") continue; // any back action
-    return tpl;
-  }
-}
+    const category = TEMPLATE_CATEGORIES[catKey];
 
-async function selectCategory(): Promise<string> {
-  const choices = Object.entries(TEMPLATE_CATEGORIES).map(([key, c]) => ({
-    name: c.name,
-    value: key,
-  }));
-  choices.push({
-    name: chalk.dim("← 返回模板选择方式"),
-    value: "back_to_method",
-  });
+    // Step 2: Select stack (auto-select if only one)
+    const stackEntries = Object.entries(category.stacks);
+    let stackKey: string;
 
-  const { categoryKey } = await inquirer.prompt<{ categoryKey: string }>([
-    { type: "list", name: "categoryKey", message: "请选择项目类型:", choices },
-  ]);
-  return categoryKey;
-}
+    if (stackEntries.length === 1) {
+      stackKey = stackEntries[0][0];
+    } else {
+      const stackOptions = stackEntries.map(([key, s]) => ({
+        value: key,
+        label: s.name,
+      }));
+      stackOptions.push({ value: "back", label: "<- 返回" });
 
-async function selectStack(categoryKey: string): Promise<string> {
-  const category = TEMPLATE_CATEGORIES[categoryKey];
-  const choices = Object.entries(category.stacks).map(([key, s]) => ({
-    name: s.name,
-    value: key,
-  }));
+      const sk = await p.select({
+        message: "请选择技术栈:",
+        options: stackOptions,
+      });
 
-  choices.push(
-    {
-      name: chalk.dim("─────────────────────"),
-      value: "separator",
-      disabled: true,
-    } as any,
-    { name: chalk.dim("← 返回项目类型选择"), value: "back_to_category" },
-    { name: chalk.dim("← 返回模板选择方式"), value: "back_to_method" },
-  );
+      if (p.isCancel(sk)) process.exit(0);
+      if (sk === "back") continue;
+      stackKey = sk;
+    }
 
-  if (choices.length === 4) return choices[0].value; // only 1 stack + separators
+    const stack = category.stacks[stackKey];
 
-  const { stackKey } = await inquirer.prompt<{ stackKey: string }>([
-    { type: "list", name: "stackKey", message: "请选择技术栈:", choices },
-  ]);
-  return stackKey;
-}
+    // Step 3: Select pattern (auto-select if only one)
+    const patternEntries = Object.entries(stack.patterns);
+    let patternKey: string;
 
-async function selectPattern(
-  catKey: string,
-  stackKey: string,
-): Promise<string> {
-  if (["back_to_category", "back_to_method"].includes(stackKey))
-    return stackKey;
+    if (patternEntries.length === 1) {
+      patternKey = patternEntries[0][0];
+    } else {
+      const patternOptions = patternEntries.map(([key, pt]) => ({
+        value: key,
+        label: pt.name,
+      }));
+      patternOptions.push({ value: "back", label: "<- 返回" });
 
-  const stack = TEMPLATE_CATEGORIES[catKey].stacks[stackKey];
-  const choices = Object.entries(stack.patterns).map(([key, p]) => ({
-    name: p.name,
-    value: key,
-  }));
+      const pk = await p.select({
+        message: "请选择架构模式:",
+        options: patternOptions,
+      });
 
-  choices.push(
-    {
-      name: chalk.dim("─────────────────────"),
-      value: "separator",
-      disabled: true,
-    } as any,
-    { name: chalk.dim("← 返回技术栈选择"), value: "back_to_stack" },
-    { name: chalk.dim("← 返回项目类型选择"), value: "back_to_category" },
-    { name: chalk.dim("← 返回模板选择方式"), value: "back_to_method" },
-  );
+      if (p.isCancel(pk)) process.exit(0);
+      if (pk === "back") continue;
+      patternKey = pk;
+    }
 
-  if (choices.length === 5) return choices[0].value; // only 1 pattern + nav
+    // Step 4: Select template
+    const templates = getTemplatesByCategory(catKey, stackKey, patternKey);
+    const tplOptions = Object.entries(templates).map(([key, t]) => {
+      const ver = VERSION_LABELS[t.version] || t.version;
+      return {
+        value: key,
+        label: `${t.name} [${ver}]`,
+        hint: t.description,
+      };
+    });
+    tplOptions.push({ value: "back", label: "<- 返回", hint: "" });
 
-  const { patternKey } = await inquirer.prompt<{ patternKey: string }>([
-    { type: "list", name: "patternKey", message: "请选择架构模式:", choices },
-  ]);
-  return patternKey;
-}
-
-async function selectSpecificTemplate(
-  catKey: string,
-  stackKey: string,
-  patternKey: string,
-): Promise<SelectedTemplate | string> {
-  if (
-    ["back_to_stack", "back_to_category", "back_to_method"].includes(patternKey)
-  ) {
-    return patternKey;
-  }
-
-  const templates = getTemplatesByCategory(catKey, stackKey, patternKey);
-  const choices: object[] = Object.entries(templates).map(([key, t]) => ({
-    name: `${t.name} - ${chalk.dim(t.description)}`,
-    value: { key, ...t },
-    short: t.name,
-  }));
-
-  choices.push(
-    {
-      name: chalk.dim("─────────────────────"),
-      value: "separator",
-      disabled: true,
-    },
-    { name: chalk.dim("← 返回架构模式选择"), value: "back_to_pattern" },
-    { name: chalk.dim("← 返回技术栈选择"), value: "back_to_stack" },
-    { name: chalk.dim("← 返回项目类型选择"), value: "back_to_category" },
-    { name: chalk.dim("← 返回模板选择方式"), value: "back_to_method" },
-  );
-
-  const { selectedTemplate } = await inquirer.prompt<{
-    selectedTemplate: SelectedTemplate | string;
-  }>([
-    {
-      type: "list",
-      name: "selectedTemplate",
+    const tplKey = await p.select({
       message: "请选择模板版本:",
-      choices,
-    },
-  ]);
-  return selectedTemplate;
+      options: tplOptions,
+    });
+
+    if (p.isCancel(tplKey)) process.exit(0);
+    if (tplKey === "back") continue;
+
+    const t = templates[tplKey];
+    return { key: tplKey, ...t };
+  }
 }
 
 // ── Search selection ─────────────────────────────────────────────
 
 async function selectBySearch(): Promise<SelectedTemplate> {
   while (true) {
-    const { keyword } = await inquirer.prompt<{ keyword: string }>([
-      {
-        type: "input",
-        name: "keyword",
-        message: "请输入搜索关键词 (名称、描述、技术栈):",
-        validate: (input: string) => (input.trim() ? true : "关键词不能为空"),
-      },
-    ]);
+    const keyword = await p.text({
+      message: "请输入搜索关键词 (名称、描述、技术栈):",
+      validate: (input) => (input?.trim() ? undefined : "关键词不能为空"),
+    });
+
+    if (p.isCancel(keyword)) return await selectTemplateMethod();
 
     const results = searchTemplates(keyword);
 
     if (Object.keys(results).length === 0) {
-      console.log();
-      console.log(chalk.yellow("没有找到匹配的模板"));
-      console.log(chalk.dim(`搜索关键词: "${keyword}"`));
-      console.log();
+      p.log.warn(`没有找到匹配的模板 (关键词: "${keyword}")`);
 
-      const { action } = await inquirer.prompt<{ action: string }>([
-        {
-          type: "list",
-          name: "action",
-          message: "请选择下一步操作:",
-          choices: [
-            { name: "重新搜索", value: "retry" },
-            { name: chalk.dim("<- 返回模板选择方式"), value: "back" },
-          ],
-        },
-      ]);
+      const action = await p.select({
+        message: "请选择下一步操作:",
+        options: [
+          { value: "retry", label: "重新搜索" },
+          { value: "back", label: "<- 返回模板选择方式" },
+        ],
+      });
 
-      if (action === "retry") continue;
-      return await selectTemplateMethod();
+      if (p.isCancel(action) || action === "back") return await selectTemplateMethod();
+      continue;
     }
 
-    console.log();
-    console.log(chalk.bold("  搜索结果"));
-    console.log(
-      chalk.dim(
-        `关键词: "${keyword}" • 找到 ${Object.keys(results).length} 个匹配模板`,
-      ),
+    p.log.info(`关键词: "${keyword}" -- 找到 ${Object.keys(results).length} 个匹配模板`);
+
+    const options: { value: string; label: string; hint?: string }[] = [];
+
+    for (const [key, t] of Object.entries(results)) {
+      const ver = VERSION_LABELS[t.version] || t.version;
+      const info = t.features.slice(0, 3).join(", ");
+      options.push({
+        value: key,
+        label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+        hint: `${t.description} | ${info}`,
+      });
+    }
+
+    options.push(
+      { value: "search_again", label: "重新搜索" },
+      { value: "back_to_mode", label: "<- 返回模板选择方式" },
     );
-    console.log();
 
-    const choices: object[] = Object.entries(results).map(([key, t]) => {
-      const hl = (text: string) =>
-        text.replace(
-          new RegExp(`(${keyword})`, "gi"),
-          chalk.bgYellow.black("$1"),
-        );
-      const ver = getVersionLabel(t.version);
-      const info = t.features.slice(0, 2).join(" • ");
-
-      return {
-        name: `${chalk.bold(hl(t.name.replace(STRIP_VERSION_RE, "")))} ${ver}\n   ${chalk.dim(hl(t.description))}\n   ${chalk.dim(`${info} • key: ${key}`)}\n   ${chalk.dim("─".repeat(60))}`,
-        value: { key, ...t },
-        short: t.name,
-      };
+    const selected = await p.select({
+      message: "选择模板:",
+      options,
     });
 
-    choices.push(
-      { name: chalk.dim("━".repeat(70)), value: "separator", disabled: true },
-      { name: "重新搜索", value: "search_again" },
-      { name: chalk.dim("<- 返回模板选择方式"), value: "back_to_mode" },
-    );
+    if (p.isCancel(selected)) process.exit(0);
+    if (selected === "search_again") continue;
+    if (selected === "back_to_mode") return await selectTemplateMethod();
 
-    const { selectedTemplate } = await inquirer.prompt<{
-      selectedTemplate: SelectedTemplate | string;
-    }>([
-      {
-        type: "list",
-        name: "selectedTemplate",
-        message: "选择模板:",
-        choices,
-        pageSize: 15,
-        loop: false,
-      },
-    ]);
-
-    if (selectedTemplate === "search_again") continue;
-    if (selectedTemplate === "back_to_mode")
-      return await selectTemplateMethod();
-    return selectedTemplate as SelectedTemplate;
+    const t = results[selected];
+    return { key: selected, ...t };
   }
 }
 
@@ -514,59 +390,37 @@ async function selectBySearch(): Promise<SelectedTemplate> {
 async function selectFromAll(): Promise<SelectedTemplate> {
   const allTemplates = getAllTemplates();
 
-  console.log();
-  console.log(chalk.bold("  所有可用模板"));
-  console.log(chalk.dim(`  共 ${Object.keys(allTemplates).length} 个模板可选`));
-  console.log();
+  p.log.info(chalk.bold("所有可用模板") + chalk.dim(` -- 共 ${Object.keys(allTemplates).length} 个模板可选`));
 
-  const categorizedChoices: object[] = [];
+  const options: { value: string; label: string; hint?: string }[] = [];
 
   for (const [_catKey, category] of Object.entries(TEMPLATE_CATEGORIES)) {
-    categorizedChoices.push({
-      name: chalk.yellow.bold(category.name),
-      value: `${_catKey}_header`,
-      disabled: true,
-    });
-
     for (const [_sKey, stack] of Object.entries(category.stacks)) {
       for (const _pattern of Object.values(stack.patterns)) {
         for (const [key, t] of Object.entries(_pattern.templates)) {
-          const ver = getVersionLabel(t.version);
-          categorizedChoices.push({
-            name: `  ● ${chalk.bold(t.name.replace(STRIP_VERSION_RE, ""))} ${ver} - ${chalk.dim(t.description)}\n     ${chalk.dim(`技术栈: ${stack.name} • 命令: robot create my-app -t ${key}`)}`,
-            value: { key, ...t },
-            short: t.name,
-          });
-          categorizedChoices.push({
-            name: chalk.dim("    " + "─".repeat(66)),
-            value: `sep_${key}`,
-            disabled: true,
+          const ver = VERSION_LABELS[t.version] || t.version;
+          options.push({
+            value: key,
+            label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+            hint: `${category.name} > ${stack.name} | ${t.description}`,
           });
         }
       }
     }
   }
 
-  categorizedChoices.push(
-    { name: chalk.dim("━".repeat(70)), value: "separator", disabled: true },
-    { name: chalk.dim("<- 返回模板选择方式"), value: "back_to_mode" },
-  );
+  options.push({ value: "back_to_mode", label: "<- 返回模板选择方式" });
 
-  const { selectedTemplate } = await inquirer.prompt<{
-    selectedTemplate: SelectedTemplate | string;
-  }>([
-    {
-      type: "list",
-      name: "selectedTemplate",
-      message: "选择模板:",
-      choices: categorizedChoices,
-      pageSize: 25,
-      loop: false,
-    },
-  ]);
+  const selected = await p.select({
+    message: "选择模板:",
+    options,
+  });
 
-  if (selectedTemplate === "back_to_mode") return await selectTemplateMethod();
-  return selectedTemplate as SelectedTemplate;
+  if (p.isCancel(selected)) process.exit(0);
+  if (selected === "back_to_mode") return await selectTemplateMethod();
+
+  const t = allTemplates[selected];
+  return { key: selected, ...t };
 }
 
 // ── Project Configuration ────────────────────────────────────────
@@ -574,105 +428,76 @@ async function selectFromAll(): Promise<SelectedTemplate> {
 async function configureProject(
   options: CreateOptions,
 ): Promise<ProjectConfig> {
-  console.log();
-  console.log(chalk.bold("  项目配置"));
-  console.log();
+  p.log.step(chalk.bold("项目配置"));
 
   const available = detectPackageManager();
   const hasBun = available.includes("bun");
   const hasPnpm = available.includes("pnpm");
 
-  const managerChoices: { name: string; value: string }[] = [];
-  if (available.includes("bun"))
-    managerChoices.push({
-      name: "bun (推荐 - 极速安装，现代化，性能最佳)",
-      value: "bun",
-    });
-  if (available.includes("pnpm"))
-    managerChoices.push({
-      name: "pnpm (推荐 - 快速安装，节省磁盘空间)",
-      value: "pnpm",
-    });
-  if (available.includes("yarn"))
-    managerChoices.push({
-      name: "yarn (兼容性好 - 适用于现有yarn项目)",
-      value: "yarn",
-    });
-  if (available.includes("npm"))
-    managerChoices.push({
-      name: "npm (默认 - Node.js内置，兼容性最好)",
-      value: "npm",
-    });
+  const initGit = await p.confirm({
+    message: "是否初始化 Git 仓库?",
+    initialValue: true,
+  });
+  if (p.isCancel(initGit)) process.exit(0);
 
-  if (managerChoices.length === 0) {
-    managerChoices.push(
-      { name: "npm (默认)", value: "npm" },
-      { name: "bun (如已安装)", value: "bun" },
-      { name: "pnpm (如已安装)", value: "pnpm" },
-      { name: "yarn (如已安装)", value: "yarn" },
-    );
-  }
+  const installDeps = await p.confirm({
+    message: "是否立即安装依赖?",
+    initialValue: !options.skipInstall,
+  });
+  if (p.isCancel(installDeps)) process.exit(0);
 
-  const config = await inquirer.prompt([
-    {
-      type: "confirm",
-      name: "initGit",
-      message: "是否初始化 Git 仓库?",
-      default: true,
-    },
-    {
-      type: "confirm",
-      name: "installDeps",
-      message: "是否立即安装依赖?",
-      default: !options.skipInstall,
-    },
-    {
-      type: "list",
-      name: "packageManager",
+  let packageManager = hasBun ? "bun" : hasPnpm ? "pnpm" : "npm";
+
+  if (installDeps) {
+    const managerOptions: { value: string; label: string; hint?: string }[] = [];
+    if (available.includes("bun"))
+      managerOptions.push({ value: "bun", label: "bun", hint: "推荐 - 极速安装" });
+    if (available.includes("pnpm"))
+      managerOptions.push({ value: "pnpm", label: "pnpm", hint: "推荐 - 节省磁盘空间" });
+    if (available.includes("yarn"))
+      managerOptions.push({ value: "yarn", label: "yarn", hint: "兼容性好" });
+    if (available.includes("npm"))
+      managerOptions.push({ value: "npm", label: "npm", hint: "Node.js 内置" });
+
+    if (managerOptions.length === 0) {
+      managerOptions.push(
+        { value: "npm", label: "npm" },
+        { value: "bun", label: "bun" },
+        { value: "pnpm", label: "pnpm" },
+        { value: "yarn", label: "yarn" },
+      );
+    }
+
+    const pm = await p.select({
       message: "选择包管理器:",
-      choices: managerChoices,
-      default: hasBun ? "bun" : hasPnpm ? "pnpm" : "npm",
-      when: (a: Record<string, boolean>) => a.installDeps,
-    },
-    {
-      type: "input",
-      name: "description",
-      message: "项目描述 (可选):",
-      default: "",
-    },
-    {
-      type: "input",
-      name: "author",
-      message: "作者 (可选):",
-      default: getGitUser(),
-    },
-    {
-      type: "confirm",
-      name: "confirmConfig",
-      message: "确认以上配置?",
-      default: true,
-    },
-  ]);
-
-  if (!config.confirmConfig) {
-    const { action } = await inquirer.prompt<{ action: string }>([
-      {
-        type: "list",
-        name: "action",
-        message: "请选择操作:",
-        choices: [
-          { name: "重新配置", value: "reconfigure" },
-          { name: "取消创建", value: "cancel" },
-        ],
-      },
-    ]);
-
-    if (action === "reconfigure") return await configureProject(options);
-    console.log(chalk.yellow("取消创建项目"));
-    process.exit(0);
+      options: managerOptions,
+      initialValue: hasBun ? "bun" : hasPnpm ? "pnpm" : "npm",
+    });
+    if (p.isCancel(pm)) process.exit(0);
+    packageManager = pm;
   }
 
-  return config as unknown as ProjectConfig;
+  const description = await p.text({
+    message: "项目描述 (可选):",
+    defaultValue: "",
+    placeholder: "输入项目描述或直接回车跳过",
+  });
+  if (p.isCancel(description)) process.exit(0);
+
+  const author = await p.text({
+    message: "作者 (可选):",
+    defaultValue: getGitUser(),
+    placeholder: getGitUser() || "输入作者名",
+  });
+  if (p.isCancel(author)) process.exit(0);
+
+  return {
+    initGit,
+    installDeps,
+    packageManager: packageManager as ProjectConfig["packageManager"],
+    description,
+    author,
+  };
 }
 
 // ── Confirm ────────────────────────────────────────────────────────────
@@ -682,38 +507,28 @@ async function confirmCreation(
   template: SelectedTemplate,
   config: ProjectConfig,
 ): Promise<void> {
-  console.log();
-  console.log(chalk.bold("  项目创建信息确认:"));
-  console.log();
-  console.log(`  项目名称: ${chalk.cyan(projectName)}`);
-  console.log(`  选择模板: ${chalk.cyan(template.name)}`);
-  console.log(`  模板描述: ${chalk.dim(template.description)}`);
-  console.log(
-    `  包含功能: ${chalk.dim(template.features.join(", ") || "自定义模板")}`,
+  p.note(
+    [
+      `${chalk.dim("项目名称:")} ${chalk.cyan(projectName)}`,
+      `${chalk.dim("选择模板:")} ${chalk.cyan(template.name)}`,
+      `${chalk.dim("模板描述:")} ${template.description}`,
+      `${chalk.dim("包含功能:")} ${template.features.join(", ") || "自定义模板"}`,
+      config.description ? `${chalk.dim("项目描述:")} ${config.description}` : "",
+      config.author ? `${chalk.dim("作    者:")} ${config.author}` : "",
+      `${chalk.dim("初始化Git:")} ${config.initGit ? chalk.green("是") : "否"}`,
+      `${chalk.dim("安装依赖:")} ${config.installDeps ? chalk.green("是") + ` (${config.packageManager})` : "否"}`,
+      `${chalk.dim("源码仓库:")} ${template.repoUrl}`,
+    ].filter(Boolean).join("\n"),
+    "项目创建信息确认",
   );
-  if (config.description)
-    console.log(`  项目描述: ${chalk.dim(config.description)}`);
-  if (config.author) console.log(`  作　　者: ${chalk.dim(config.author)}`);
-  console.log(
-    `  初始化Git: ${config.initGit ? chalk.green("是") : chalk.dim("否")}`,
-  );
-  console.log(
-    `  安装依赖: ${config.installDeps ? chalk.green("是") + chalk.dim(` (${config.packageManager})`) : chalk.dim("否")}`,
-  );
-  console.log(`  源码仓库: ${chalk.dim(template.repoUrl)}`);
-  console.log();
 
-  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
-    {
-      type: "confirm",
-      name: "confirmed",
-      message: "确认创建项目?",
-      default: true,
-    },
-  ]);
+  const confirmed = await p.confirm({
+    message: "确认创建项目?",
+    initialValue: true,
+  });
 
-  if (!confirmed) {
-    console.log(chalk.yellow("取消创建"));
+  if (p.isCancel(confirmed) || !confirmed) {
+    p.outro(chalk.yellow("取消创建"));
     process.exit(0);
   }
 }
@@ -744,19 +559,15 @@ async function executeCreation(
 
     if (fs.existsSync(projectPath)) {
       spinner.stop();
-      console.log(chalk.yellow("项目目录已存在"));
+      p.log.warn("项目目录已存在");
 
-      const { overwrite } = await inquirer.prompt<{ overwrite: boolean }>([
-        {
-          type: "confirm",
-          name: "overwrite",
-          message: "目录已存在，是否覆盖?",
-          default: false,
-        },
-      ]);
+      const overwrite = await p.confirm({
+        message: "目录已存在，是否覆盖?",
+        initialValue: false,
+      });
 
-      if (!overwrite) {
-        console.log(chalk.yellow("取消创建"));
+      if (p.isCancel(overwrite) || !overwrite) {
+        p.outro(chalk.yellow("取消创建"));
         process.exit(0);
       }
 
@@ -811,46 +622,35 @@ async function executeCreation(
     // 8. Done!
     spinner.succeed(chalk.green("项目创建成功!"));
 
-    console.log();
-    console.log(chalk.green("项目创建完成!"));
-    console.log();
-    console.log(chalk.blue("项目信息:"));
-    console.log(`   位置: ${chalk.cyan(projectPath)}`);
-    console.log(`   模板: ${chalk.cyan(template.name)}`);
-    console.log(
-      `   Git仓库: ${config.initGit ? chalk.green("已初始化") : chalk.dim("未初始化")}`,
-    );
-    console.log(
-      `   依赖安装: ${config.installDeps ? chalk.green("已完成") : chalk.dim("需手动安装")}`,
-    );
-    console.log();
-    console.log(chalk.blue("快速开始:"));
-    console.log(chalk.cyan(`   cd ${projectName}`));
-
     const pm = config.packageManager || "bun";
-    if (!config.installDeps) {
-      console.log(chalk.cyan(`   ${pm} install`));
-    }
-
     const cmd = getStartCommand(template, pm);
-    if (cmd) console.log(chalk.cyan(`   ${cmd}`));
+    const steps = [`cd ${projectName}`];
+    if (!config.installDeps) steps.push(`${pm} install`);
+    if (cmd) steps.push(cmd);
 
-    if (pm === "bun")
-      console.log(chalk.dim("   # 或使用 npm: npm install && npm run dev"));
-    else if (pm === "npm")
-      console.log(
-        chalk.dim("   # 或使用 bun: bun install && bun run dev (如已安装)"),
-      );
-    console.log();
+    p.note(
+      [
+        `${chalk.dim("位置:")}   ${chalk.cyan(projectPath)}`,
+        `${chalk.dim("模板:")}   ${chalk.cyan(template.name)}`,
+        `${chalk.dim("Git:")}    ${config.initGit ? chalk.green("已初始化") : "未初始化"}`,
+        `${chalk.dim("依赖:")}   ${config.installDeps ? chalk.green("已完成") : "需手动安装"}`,
+        "",
+        chalk.bold("快速开始:"),
+        ...steps.map((s) => `  ${chalk.cyan(s)}`),
+      ].join("\n"),
+      "项目创建完成",
+    );
 
     // Stats
-    spinner.start("统计项目信息...");
+    const statsSpinner = ora("统计项目信息...").start();
     const stats = await generateProjectStats(projectPath);
-    spinner.stop();
+    statsSpinner.stop();
     if (stats) {
       printProjectStats(stats);
       console.log();
     }
+
+    p.outro(chalk.green("Happy coding!"));
   } catch (error) {
     if (tempPath) await fs.remove(tempPath).catch(() => {});
     if (spinner.isSpinning) spinner.fail("创建项目失败");

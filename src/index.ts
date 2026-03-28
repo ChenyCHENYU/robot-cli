@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
-import inquirer from "inquirer";
+import * as p from "@clack/prompts";
 import { Command } from "commander";
 import { createProject } from "./create";
 import { runDoctor } from "./doctor";
@@ -36,21 +36,12 @@ const VERSION = getPackageVersion();
 // ── Welcome Banner ───────────────────────────────────────────────
 
 function showWelcome(): void {
-  const supportsColor =
-    process.stdout.isTTY && process.stdout.getColorDepth() > 1;
-
   console.log();
-
-  if (supportsColor) {
-    console.log(chalk.bold.cyan("  R O B O T   C L I"));
-  } else {
-    console.log("  R O B O T   C L I");
-  }
-
-  console.log(
-    chalk.dim(`  v${VERSION}  |  ${chalk.reset.dim("工程化项目脚手架")}`),
-  );
-  console.log(chalk.dim("  前端 / 后端 / 移动端 / 桌面端"));
+  console.log(chalk.cyan("  ╔══════════════════════════════════════╗"));
+  console.log(chalk.cyan("  ║") + chalk.bold.cyan("        R O B O T   C L I             ") + chalk.cyan("║"));
+  console.log(chalk.cyan("  ║") + chalk.dim(`  v${VERSION}  |  工程化项目脚手架`.padEnd(38)) + chalk.cyan("║"));
+  console.log(chalk.cyan("  ║") + chalk.dim("  前端 / 后端 / 移动端 / 桌面端".padEnd(38)) + chalk.cyan("║"));
+  console.log(chalk.cyan("  ╚══════════════════════════════════════╝"));
   console.log();
 }
 
@@ -60,40 +51,23 @@ async function showMainMenu(): Promise<void> {
   const allTemplates = getAllTemplates();
   const count = Object.keys(allTemplates).length;
 
-  console.log(
-    chalk.dim(
-      `  ${count} 个模板可用  ·  Node ${process.version}  ·  v${VERSION}`,
-    ),
-  );
-  console.log();
+  p.intro(chalk.bgCyan.black(` ${count} 个模板可用  ·  Node ${process.version}  ·  v${VERSION} `));
 
-  const { action } = await inquirer.prompt<{ action: string }>([
-    {
-      type: "list",
-      name: "action",
-      message: "请选择操作:",
-      choices: [
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("创建新项目")}  ${chalk.dim("— 选择模板创建项目")}`,
-          value: "create",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("查看模板列表")}  ${chalk.dim("— 浏览所有可用模板")}`,
-          value: "list",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("搜索模板")}  ${chalk.dim("— 按关键词搜索模板")}`,
-          value: "search",
-        },
-        {
-          name: `${chalk.cyan(">")} ${chalk.bold("环境诊断")}  ${chalk.dim("— 检查开发环境")}`,
-          value: "doctor",
-        },
-        { name: chalk.dim("─".repeat(50)), value: "sep", disabled: true },
-        { name: `${chalk.dim("  退出")}`, value: "exit" },
-      ],
-    },
-  ]);
+  const action = await p.select({
+    message: "请选择操作:",
+    options: [
+      { value: "create", label: "创建新项目", hint: "选择模板创建项目" },
+      { value: "list", label: "查看模板列表", hint: "浏览所有可用模板" },
+      { value: "search", label: "搜索模板", hint: "按关键词搜索模板" },
+      { value: "doctor", label: "环境诊断", hint: "检查开发环境" },
+      { value: "exit", label: "退出" },
+    ],
+  });
+
+  if (p.isCancel(action)) {
+    p.outro(chalk.dim("再见!"));
+    process.exit(0);
+  }
 
   switch (action) {
     case "create":
@@ -109,7 +83,7 @@ async function showMainMenu(): Promise<void> {
       await runDoctor();
       break;
     case "exit":
-      console.log(chalk.dim("  再见!"));
+      p.outro(chalk.dim("再见!"));
       process.exit(0);
   }
 }
@@ -144,14 +118,12 @@ function showTemplateList(recommended: boolean): void {
 // ── Search Command ───────────────────────────────────────────────
 
 async function searchInteractive(): Promise<void> {
-  const { keyword } = await inquirer.prompt<{ keyword: string }>([
-    {
-      type: "input",
-      name: "keyword",
-      message: "搜索关键词:",
-      validate: (i: string) => (i.trim() ? true : "请输入关键词"),
-    },
-  ]);
+  const keyword = await p.text({
+    message: "搜索关键词:",
+    validate: (i) => (i?.trim() ? undefined : "请输入关键词"),
+  });
+
+  if (p.isCancel(keyword)) return;
 
   showSearchResults(keyword);
 }
