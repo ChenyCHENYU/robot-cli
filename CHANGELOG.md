@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.2] - 2026-03-29
+
+### Fixed
+
+- **根治 ZIP 下载内容校验问题** — 新增两层防护:
+  1. `Content-Type` 检测: 若服务器返回 `text/html`（登录页/CAPTCHA/跳转页）立即报错，`tryDownload` 自动切换到下一个源（codeload CDN → GitHub API → github.com）
+  2. ZIP 魔术字节校验 (`PK 50 4B`): 写入磁盘前检查 buffer 头部，若不是合法 ZIP 抛出含内容预览的可读错误，而非让 `extract-zip` 报 `end of central directory record signature not found`
+
 ## [3.0.1] - 2026-03-28
 
 ### Fixed

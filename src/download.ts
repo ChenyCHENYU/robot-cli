@@ -234,6 +234,12 @@ async function fetchWithRetry(
         throw new Error(`HTTP ${response.status}`);
       }
 
+      // 拒绝 HTML 响应 — 通常是登录页、CAPTCHA 或跳转页，不是 ZIP 文件
+      const ct = response.headers.get("content-type") ?? "";
+      if (ct.includes("text/html")) {
+        throw new Error(`收到 HTML 响应而非 ZIP 文件（该源可能需要认证）`);
+      }
+
       return response;
     } catch (error) {
       lastError = error as Error;
@@ -303,6 +309,25 @@ async function tryDownload(
 }
 
 /**
+ * 校验 buffer 是否以 ZIP 魔术字节 PK (50 4B) 开头。
+ * 若不是则说明下载到的是错误页面（HTML/JSON 等），直接抛出含内容预览的错误。
+ */
+function assertZipBuffer(buffer: Buffer, sourceName: string): void {
+  if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
+    // 取前 100 字节做预览，过滤不可打印字符
+    const preview = buffer
+      .slice(0, 100)
+      .toString("utf8")
+      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\xff]/g, "·")
+      .replace(/\s+/g, " ")
+      .slice(0, 80);
+    throw new Error(
+      `${sourceName} 返回的不是有效 ZIP 文件 (内容: "${preview}")`,
+    );
+  }
+}
+
+/**
  * Download template — always fetches latest, caches for offline fallback.
  */
 export async function downloadTemplate(
@@ -359,10 +384,12 @@ export async function downloadTemplate(
       }
 
       const buffer = Buffer.concat(chunks);
+      assertZipBuffer(buffer, sourceName);
       await fs.writeFile(tempZip, buffer);
     } else {
       // Fallback: no content-length, download without progress
       const buffer = Buffer.from(await response.arrayBuffer());
+      assertZipBuffer(buffer, sourceName);
       await fs.writeFile(tempZip, buffer);
     }
 
