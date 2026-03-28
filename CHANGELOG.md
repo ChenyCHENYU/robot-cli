@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.4] - 2026-03-29
+
+### Changed (Breaking)
+
+- **彻底重写下载策略 — `git clone --depth=1` 作为主方案**
+  - 根本原因分析：HTTP ZIP 下载受到国内网络封锁、Gitee 登录拦截、Content-Type 不一致等各种干扰，是错误的技术路线
+  - `git clone --depth=1` 是 create-vue / create-vite / degit / giget 等所有主流 CLI 的底层实现
+  - 自动继承用户系统级 git 代理配置 (`http.proxy` / `https.proxy`)，无需 CLI 工具自己处理网络问题
+  - 实时显示 git 进度条（解析 git stderr 百分比输出）
+  - 无超时问题：git 自己管理连接，有数据在流就不断
+  - 无 ZIP 解析问题：直接输出目录结构
+
+- **优先顺序**：Gitee git clone（国内快）→ GitHub git clone → HTTP ZIP 兜底（仅当系统无 git 时）
+
+- **缓存前置**：启动时先检查缓存，命中则直接用，不发起任何网络请求
+
 ## [3.0.3] - 2026-03-29
 
 ### Fixed

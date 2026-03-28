@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import os from "node:os";
+import { spawn } from "node:child_process";
 import chalk from "chalk";
 import extract from "extract-zip";
 import type { TemplateConfig, DownloadOptions, CacheIndex } from "./types";
@@ -340,6 +341,66 @@ function assertZipBuffer(buffer: Buffer, sourceName: string): void {
 }
 
 /**
+ * 使用系统 git 执行 shallow clone (--depth=1)。
+ *
+ * 这是最可靠的下载方式，原因：
+ * - 自动继承用户系统级 git 代理配置 (http.proxy / https.proxy)
+ * - 无 HTTP 超时问题、无 ZIP 解析问题
+ * - git stderr 输出含百分比进度，可实时展示
+ *
+ * @throws Error("GIT_NOT_FOUND") 当系统没有安装 git 时，调用方据此切换到 HTTP 兜底
+ */
+async function gitCloneTemplate(
+  repoUrl: string,
+  branch: string,
+  targetDir: string,
+  spinner?: import("ora").Ora,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (spinner) spinner.text = `连接中...`;
+
+    const args = [
+      "clone",
+      "--depth=1",
+      "--single-branch",
+      "--branch",
+      branch,
+      repoUrl,
+      targetDir,
+    ];
+
+    const proc = spawn("git", args, { stdio: ["ignore", "ignore", "pipe"] });
+
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      if (!spinner) return;
+      // git 进度输出格式: "Receiving objects:  45% (234/521), 2.90 MiB | 1.00 MiB/s"
+      const text = chunk.toString();
+      const pctMatch = text.match(/(\d+)%\s*\((\d+)\/(\d+)\)/);
+      if (pctMatch) {
+        const pct = parseInt(pctMatch[1]);
+        const filled = Math.round(pct / 5);
+        const bar = "█".repeat(filled) + "░".repeat(20 - filled);
+        const speed = text.match(/([\d.]+\s*[KMG]iB\/s)/)?.[1] ?? "";
+        spinner.text = `下载中 [${bar}] ${pct}%${speed ? "  " + speed : ""}`;
+      } else {
+        const line = text.split(/\r?\n/).find((l) => l.trim())?.trim() ?? "";
+        if (line && line.length < 80) spinner.text = `克隆中... ${line}`;
+      }
+    });
+
+    proc.on("error", (err: NodeJS.ErrnoException) => {
+      // ENOENT = git 二进制不存在
+      reject(new Error(err.code === "ENOENT" ? "GIT_NOT_FOUND" : `git 启动失败: ${err.message}`));
+    });
+
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`git clone 失败 (exit ${code})`));
+    });
+  });
+}
+
+/**
  * Download template — always fetches latest, caches for offline fallback.
  */
 export async function downloadTemplate(
@@ -354,9 +415,62 @@ export async function downloadTemplate(
     throw new Error(`模板配置无效: ${JSON.stringify(template)}`);
   }
 
-  // ── Try network download ───────────────────────────────────────
+  // ── 缓存检查 ───────────────────────────────────────────────────
+  if (!noCache) {
+    const cached = await getCachedTemplate(template.repoUrl);
+    if (cached) {
+      if (spinner) spinner.text = "已使用缓存模板，如需更新请运行 robot cache clear";
+      return cached;
+    }
+  }
+
+  // ── Strategy 1: git clone --depth=1 ──────────────────────────
+  // 最可靠方案：使用系统 git，自动继承代理配置
+  // create-vue / create-vite / degit / giget 底层都走此路径
+  // 优先顺序：Gitee（国内快）→ GitHub
+  const cloneSources: Array<{ url: string; name: string }> = [];
+  if (giteeUrl) cloneSources.push({ url: giteeUrl, name: "Gitee" });
+  cloneSources.push({ url: template.repoUrl, name: "GitHub" });
+
+  let noGit = false;
+  const cloneErrors: string[] = [];
+
+  for (const { url: cloneUrl, name: srcName } of cloneSources) {
+    const tempDir = path.join(os.tmpdir(), `robot-git-${Date.now()}`);
+    try {
+      if (spinner) spinner.text = `连接 ${srcName}...`;
+
+      await gitCloneTemplate(cloneUrl, branch, tempDir, spinner);
+
+      // 移除 .git 历史，节省空间
+      await fs.remove(path.join(tempDir, ".git")).catch(() => {});
+
+      if (spinner) spinner.text = "验证模板完整性...";
+      if (!fs.existsSync(path.join(tempDir, "package.json"))) {
+        throw new Error("模板缺少 package.json");
+      }
+
+      if (!noCache) saveToCache(template.repoUrl, tempDir, branch).catch(() => {});
+      if (spinner) spinner.text = `模板下载完成 (${srcName})`;
+      return tempDir;
+    } catch (err) {
+      await fs.remove(tempDir).catch(() => {});
+      const msg = (err as Error).message;
+      if (msg === "GIT_NOT_FOUND") {
+        noGit = true;
+        break; // 没有 git，直接跳到 HTTP 兜底
+      }
+      cloneErrors.push(`${srcName}: ${msg}`);
+      if (spinner) spinner.text = `${srcName} 克隆失败，尝试下一个源...`;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  // ── Strategy 2: HTTP ZIP download (git 不可用时的兜底) ─────────
+  if (noGit && spinner) spinner.text = "系统未安装 git，切换到 HTTP 下载...";
+
   try {
-    if (spinner) spinner.text = "开始下载最新模板...";
+    if (spinner) spinner.text = "HTTP 下载模板中...";
 
     const { response, sourceName } = await tryDownload(
       template.repoUrl,
@@ -365,8 +479,7 @@ export async function downloadTemplate(
       giteeUrl,
     );
 
-    // ── Download with progress bar ─────────────────────────────
-    if (spinner) spinner.text = "保存下载文件...";
+    if (spinner) spinner.text = "保存文件...";
 
     const timestamp = Date.now();
     const tempZip = path.join(os.tmpdir(), `robot-template-${timestamp}.zip`);
@@ -376,30 +489,25 @@ export async function downloadTemplate(
     const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
 
     if (totalSize > 0 && response.body && spinner) {
-      // Stream download with progress bar
       const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let received = 0;
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
         received += value.length;
-
         const pct = Math.round((received / totalSize) * 100);
         const filled = Math.round(pct / 5);
-        const bar = "\u2588".repeat(filled) + "\u2591".repeat(20 - filled);
+        const bar = "█".repeat(filled) + "░".repeat(20 - filled);
         const sizeMB = (received / 1024 / 1024).toFixed(1);
         const totalMB = (totalSize / 1024 / 1024).toFixed(1);
-        spinner.text = `下载中 [${bar}] ${pct}% ${sizeMB}MB/${totalMB}MB (${sourceName})`;
+        spinner.text = `下载中 [${bar}] ${pct}% ${sizeMB}/${totalMB}MB (${sourceName})`;
       }
-
       const buffer = Buffer.concat(chunks);
       assertZipBuffer(buffer, sourceName);
       await fs.writeFile(tempZip, buffer);
     } else {
-      // Fallback: no content-length, download without progress
       const buffer = Buffer.from(await response.arrayBuffer());
       assertZipBuffer(buffer, sourceName);
       await fs.writeFile(tempZip, buffer);
@@ -408,7 +516,6 @@ export async function downloadTemplate(
     if (spinner) spinner.text = "解压模板文件...";
     await extract(tempZip, { dir: tempExtract });
 
-    if (spinner) spinner.text = "查找项目结构...";
     const extractedItems = await fs.readdir(tempExtract);
     const repoName = template.repoUrl.split("/").pop() || "";
     const projectDir = extractedItems.find(
@@ -421,60 +528,43 @@ export async function downloadTemplate(
     );
 
     if (!projectDir) {
-      throw new Error(
-        `解压后找不到项目目录，可用目录: ${extractedItems.join(", ")}`,
-      );
+      throw new Error(`解压后找不到项目目录，可用目录: ${extractedItems.join(", ")}`);
     }
 
     const sourcePath = path.join(tempExtract, projectDir);
 
-    if (spinner) spinner.text = "验证模板完整性...";
     if (!fs.existsSync(path.join(sourcePath, "package.json"))) {
       throw new Error("模板缺少 package.json 文件");
     }
 
-    // Save to cache (async, non-blocking)
-    if (!noCache) {
-      saveToCache(template.repoUrl, sourcePath, branch).catch(() => {});
-    }
-
-    if (spinner) spinner.text = `模板下载完成 (via ${sourceName})`;
+    if (!noCache) saveToCache(template.repoUrl, sourcePath, branch).catch(() => {});
+    if (spinner) spinner.text = `模板下载完成 (HTTP/${sourceName})`;
 
     await fs.remove(tempZip).catch(() => {});
     return sourcePath;
-  } catch (downloadError) {
-    // ── Fallback to cache ──────────────────────────────────────
+  } catch (httpError) {
+    // ── 最终兜底：使用缓存 ───────────────────────────────────────
     if (!noCache) {
       const cached = await getCachedTemplate(template.repoUrl);
       if (cached) {
         if (spinner) spinner.text = "网络不可用，使用缓存模板...";
-        console.log();
-        console.log(`  ${chalk.yellow("  注意: 使用缓存版本（非最新）")}`);
+        console.log(`\n  ${chalk.yellow("注意: 已使用缓存版本（非最新）")}`);
         return cached;
       }
     }
 
-    // Clean up temp files
+    // 清理临时文件
     try {
       const tmpFiles = await fs.readdir(os.tmpdir());
       for (const f of tmpFiles.filter(
-        (x) => x.includes("robot-template-") || x.includes("robot-extract-"),
+        (x) => x.includes("robot-template-") || x.includes("robot-extract-") || x.includes("robot-git-"),
       )) {
         await fs.remove(path.join(os.tmpdir(), f)).catch(() => {});
       }
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
 
-    const errMsg = (downloadError as Error).message;
-    const isTimeout = errMsg.includes("aborted") || errMsg.includes("timeout") || (downloadError as Error).name === "TimeoutError";
-    let msg = `模板下载失败: ${errMsg}`;
-
-    if (isTimeout) {
-      msg += "\n\n  建议:\n  1. 当前网络连接较慢，请稍后重试\n  2. 如果在国内，尝试使用代理或科学上网\n  3. 使用 robot doctor 检查网络连接";
-    } else if ((downloadError as NodeJS.ErrnoException).code === "ENOTFOUND") {
-      msg += "\n\n  建议:\n  1. 检查网络连接是否正常\n  2. 如果在国内，尝试使用代理\n  3. 稍后重试";
-    }
-    throw new Error(msg);
+    const errMsg = (httpError as Error).message;
+    const allErrors = [...cloneErrors, `HTTP: ${errMsg}`].map((e) => `  - ${e}`).join("\n");
+    throw new Error(`模板下载失败，所有方式均不可用:\n${allErrors}`);
   }
 }
