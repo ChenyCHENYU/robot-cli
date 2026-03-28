@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { buildDownloadUrl, getCacheKey } from "../src/download";
 
 describe("buildDownloadUrl", () => {
-  it("should build GitHub download URL", () => {
+  it("should build GitHub download URL (codeload CDN)", () => {
     const url = buildDownloadUrl("https://github.com/user/repo");
     expect(url).toBe(
-      "https://github.com/user/repo/archive/refs/heads/main.zip",
+      "https://codeload.github.com/user/repo/zip/refs/heads/main",
     );
   });
 
@@ -26,7 +26,7 @@ describe("buildDownloadUrl", () => {
   it("should handle trailing slash", () => {
     const url = buildDownloadUrl("https://github.com/user/repo/");
     expect(url).toBe(
-      "https://github.com/user/repo/archive/refs/heads/main.zip",
+      "https://codeload.github.com/user/repo/zip/refs/heads/main",
     );
   });
 
@@ -43,7 +43,7 @@ describe("buildDownloadUrl", () => {
       "micro-app",
     );
     expect(url).toBe(
-      "https://github.com/user/repo/archive/refs/heads/micro-app.zip",
+      "https://codeload.github.com/user/repo/zip/refs/heads/micro-app",
     );
   });
 

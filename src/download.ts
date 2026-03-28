@@ -12,13 +12,36 @@ const CACHE_INDEX_PATH = path.join(CACHE_DIR, "index.json");
 
 // ── URL Builders ─────────────────────────────────────────────────
 
+/**
+ * Parse GitHub repoUrl → { owner, repo }
+ * e.g. "https://github.com/ChenyCHENYU/Robot_Admin" → { owner: "ChenyCHENYU", repo: "Robot_Admin" }
+ */
+function parseGitHubRepo(repoUrl: string): { owner: string; repo: string } | null {
+  try {
+    const url = new URL(repoUrl);
+    if (url.hostname !== "github.com") return null;
+    const parts = url.pathname.replace(/^\/|\/$/g, "").split("/");
+    if (parts.length >= 2) return { owner: parts[0], repo: parts[1] };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildDownloadUrl(repoUrl: string, branch = "main"): string {
   try {
     const url = new URL(repoUrl);
     const host = url.hostname;
     const cleanUrl = repoUrl.replace(/\/+$/, "");
 
-    if (host === "github.com") return `${cleanUrl}/archive/refs/heads/${branch}.zip`;
+    // GitHub: 使用 codeload.github.com 直连 CDN (跳过 github.com 的 302 重定向)
+    if (host === "github.com") {
+      const gh = parseGitHubRepo(cleanUrl);
+      if (gh) return `https://codeload.github.com/${gh.owner}/${gh.repo}/zip/refs/heads/${branch}`;
+      return `${cleanUrl}/archive/refs/heads/${branch}.zip`;
+    }
+    if (host === "codeload.github.com") return `${cleanUrl}/zip/refs/heads/${branch}`;
+    if (host === "api.github.com") return cleanUrl; // already a full API URL
     if (host === "gitee.com")
       return `${cleanUrl}/repository/archive/${branch}.zip`;
     if (host === "gitlab.com") {
@@ -108,32 +131,90 @@ export async function clearCache(): Promise<void> {
 // ── Download logic ───────────────────────────────────────────────
 
 /** 单次下载超时 (ms) */
-const TIMEOUT_PRIMARY = 120_000; // 2 min — 中国网络访问 GitHub 需要较长时间
-const TIMEOUT_MIRROR = 60_000;   // 1 min
+const TIMEOUT_FAST = 30_000;     // 30s — 快速源 (Gitee / codeload CDN)
+const TIMEOUT_SLOW = 60_000;     // 60s — 慢速源 (API / 镜像)
 /** 每个源的最大重试次数 */
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
+
+interface DownloadSource {
+  url: string;       // 仓库基础 URL 或完整下载 URL
+  name: string;      // 展示名称
+  timeout: number;   // 超时时间
+  headers?: Record<string, string>;  // 额外请求头
+  isDirect?: boolean; // 是否已经是完整下载 URL
+}
 
 interface DownloadResult {
   response: Response;
   sourceName: string;
 }
 
-/** GitHub 镜像列表 — 按可用性排序 */
-function getGitHubMirrors(repoUrl: string, giteeUrl?: string): string[] {
-  const mirrors = [
-    repoUrl,                                              // 1. 原始 GitHub
-    repoUrl.replace("github.com", "hub.gitmirror.com"),   // 2. gitmirror
-    `https://ghproxy.net/${repoUrl}`,                     // 3. ghproxy.net
-  ];
-  // 4. Gitee 备用源 (国内优先)
-  if (giteeUrl) mirrors.push(giteeUrl);
-  return mirrors;
+/**
+ * 构建下载源列表 — 按成功率排序
+ *
+ * 策略参考 giget (unjs/giget, 306k+ 项目使用):
+ * 1. Gitee 备用源 (国内首选，速度最快)
+ * 2. codeload.github.com (GitHub 专用下载 CDN，跳过 302)
+ * 3. api.github.com REST API (GitHub 官方 API，参考 giget)
+ * 4. github.com 原始链接 (最后兜底)
+ */
+function buildDownloadSources(repoUrl: string, branch: string, giteeUrl?: string): DownloadSource[] {
+  const sources: DownloadSource[] = [];
+  const gh = parseGitHubRepo(repoUrl);
+
+  // 1. Gitee 备用源 — 对国内用户最快
+  if (giteeUrl) {
+    sources.push({
+      url: giteeUrl,
+      name: "gitee.com",
+      timeout: TIMEOUT_FAST,
+    });
+  }
+
+  if (gh) {
+    // 2. codeload.github.com — GitHub 专用下载 CDN (跳过 github.com 的 302 重定向)
+    sources.push({
+      url: `https://codeload.github.com/${gh.owner}/${gh.repo}/zip/refs/heads/${branch}`,
+      name: "codeload.github.com",
+      timeout: TIMEOUT_FAST,
+      isDirect: true,
+    });
+
+    // 3. api.github.com — GitHub REST API (giget 使用的方式)
+    sources.push({
+      url: `https://api.github.com/repos/${gh.owner}/${gh.repo}/zipball/${branch}`,
+      name: "api.github.com",
+      timeout: TIMEOUT_SLOW,
+      isDirect: true,
+      headers: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+
+    // 4. github.com 原始链接 (兜底)
+    sources.push({
+      url: repoUrl,
+      name: "github.com",
+      timeout: TIMEOUT_SLOW,
+    });
+  } else {
+    // 非 GitHub 仓库，只用原始 URL
+    sources.push({
+      url: repoUrl,
+      name: new URL(repoUrl).hostname,
+      timeout: TIMEOUT_SLOW,
+    });
+  }
+
+  return sources;
 }
 
 async function fetchWithRetry(
   downloadUrl: string,
   timeout: number,
   retries: number,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   let lastError: Error | undefined;
 
@@ -141,7 +222,11 @@ async function fetchWithRetry(
     try {
       const response = await fetch(downloadUrl, {
         signal: AbortSignal.timeout(timeout),
-        headers: { "User-Agent": "Robot-CLI" },
+        redirect: "follow",
+        headers: {
+          "User-Agent": "Robot-CLI/3.0",
+          ...extraHeaders,
+        },
       });
 
       if (!response.ok) {
@@ -157,8 +242,8 @@ async function fetchWithRetry(
       if (lastError.message.includes("404")) throw lastError;
 
       if (attempt < retries) {
-        // 指数退避: 2s, 4s
-        await new Promise((r) => setTimeout(r, 2000 * attempt));
+        // 指数退避: 1s, 2s
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
       }
     }
   }
@@ -172,50 +257,49 @@ async function tryDownload(
   spinner?: import("ora").Ora,
   giteeUrl?: string,
 ): Promise<DownloadResult> {
-  const url = new URL(repoUrl);
-  const host = url.hostname;
+  const sources = buildDownloadSources(repoUrl, branch, giteeUrl);
+  const errors: string[] = [];
 
-  const mirrors = host === "github.com" ? getGitHubMirrors(repoUrl, giteeUrl) : [repoUrl];
-
-  for (let i = 0; i < mirrors.length; i++) {
-    const current = mirrors[i];
-    const isOriginal = i === 0;
-
-    let sourceName: string;
-    try {
-      sourceName = isOriginal ? host : new URL(current.replace(/^(https?:\/\/[^/]+)\/.*/, "$1")).hostname;
-    } catch {
-      sourceName = `镜像 ${i}`;
-    }
+  for (let i = 0; i < sources.length; i++) {
+    const source = sources[i];
 
     try {
-      if (spinner) spinner.text = `连接 ${sourceName} ...`;
+      if (spinner) spinner.text = `连接 ${source.name} ...`;
 
-      const downloadUrl = current.endsWith(".zip")
-        ? current
-        : buildDownloadUrl(current, branch);
+      const downloadUrl = source.isDirect
+        ? source.url
+        : buildDownloadUrl(source.url, branch);
 
-      const timeout = isOriginal ? TIMEOUT_PRIMARY : TIMEOUT_MIRROR;
+      if (spinner) spinner.text = `从 ${source.name} 下载模板...`;
 
-      if (spinner) spinner.text = `从 ${sourceName} 下载模板 (最多重试${MAX_RETRIES}次)...`;
-
-      const response = await fetchWithRetry(downloadUrl, timeout, MAX_RETRIES);
+      const response = await fetchWithRetry(
+        downloadUrl,
+        source.timeout,
+        MAX_RETRIES,
+        source.headers,
+      );
 
       if (spinner) {
         const len = response.headers.get("content-length");
         const sizeInfo = len ? `${(parseInt(len) / 1024 / 1024).toFixed(1)}MB ` : "";
-        spinner.text = `下载中 ${sizeInfo}(${sourceName})`;
+        spinner.text = `下载中 ${sizeInfo}(${source.name})`;
       }
 
-      return { response, sourceName };
+      return { response, sourceName: source.name };
     } catch (error) {
-      if (i === mirrors.length - 1) throw error;
-      if (spinner) spinner.text = `${sourceName} 不可用，切换下一个源...`;
-      await new Promise((r) => setTimeout(r, 1000));
+      const errMsg = (error as Error).message || String(error);
+      errors.push(`${source.name}: ${errMsg}`);
+
+      if (i < sources.length - 1 && spinner) {
+        spinner.text = `${source.name} 不可用，切换到 ${sources[i + 1].name}...`;
+        await new Promise((r) => setTimeout(r, 500));
+      }
     }
   }
 
-  throw new Error("所有下载源均不可用");
+  throw new Error(
+    `所有下载源均不可用:\n${errors.map((e) => `  - ${e}`).join("\n")}`,
+  );
 }
 
 /**

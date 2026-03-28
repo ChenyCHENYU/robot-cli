@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.1] - 2026-03-28
+
+### Fixed
+
+- **下载策略全面重写** — 参考 giget (unjs/giget, 306k+ 项目使用) 的下载方式:
+  - Gitee 备用源提升为首选 (国内用户最快)
+  - 使用 `codeload.github.com` 直连 CDN 替代 `github.com/archive/` (跳过 302 重定向)
+  - 使用 `api.github.com` REST API 作为二级备选 (与 giget 一致)
+  - `github.com` 原始链接降为最后兜底
+- **移除不稳定第三方镜像** — 移除 `hub.gitmirror.com` 和 `ghproxy.net` (不可控第三方代理)
+- **超时优化** — 快速源 (Gitee/codeload) 30s, 慢速源 (API/github.com) 60s, 不再需要 120s
+- **重试缩减** — 每源 2 次重试 (原 3 次), 退避时间 1s/2s (原 2s/4s), 快速失败切换下一源
+- **错误信息增强** — 失败时列出每个源的具体错误原因
+
 ## [3.0.0] - 2026-03-28
 
 ### ⚠️ BREAKING CHANGES
