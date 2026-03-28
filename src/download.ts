@@ -107,9 +107,60 @@ export async function clearCache(): Promise<void> {
 
 // ── Download logic ───────────────────────────────────────────────
 
+/** 单次下载超时 (ms) */
+const TIMEOUT_PRIMARY = 120_000; // 2 min — 中国网络访问 GitHub 需要较长时间
+const TIMEOUT_MIRROR = 60_000;   // 1 min
+/** 每个源的最大重试次数 */
+const MAX_RETRIES = 3;
+
 interface DownloadResult {
   response: Response;
   sourceName: string;
+}
+
+/** GitHub 镜像列表 — 按可用性排序 */
+function getGitHubMirrors(repoUrl: string): string[] {
+  return [
+    repoUrl,                                        // 1. 原始 GitHub
+    repoUrl.replace("github.com", "hub.gitmirror.com"),  // 2. gitmirror
+    `https://ghproxy.net/${repoUrl}`,               // 3. ghproxy.net
+  ];
+}
+
+async function fetchWithRetry(
+  downloadUrl: string,
+  timeout: number,
+  retries: number,
+): Promise<Response> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(downloadUrl, {
+        signal: AbortSignal.timeout(timeout),
+        headers: { "User-Agent": "Robot-CLI" },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) throw new Error(`仓库不存在 (404)`);
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error as Error;
+
+      // 404 不重试
+      if (lastError.message.includes("404")) throw lastError;
+
+      if (attempt < retries) {
+        // 指数退避: 2s, 4s
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+      }
+    }
+  }
+
+  throw lastError!;
 }
 
 async function tryDownload(
@@ -120,47 +171,42 @@ async function tryDownload(
   const url = new URL(repoUrl);
   const host = url.hostname;
 
-  const mirrors =
-    host === "github.com"
-      ? [repoUrl, `https://ghproxy.com/${repoUrl}`]
-      : [repoUrl];
+  const mirrors = host === "github.com" ? getGitHubMirrors(repoUrl) : [repoUrl];
 
   for (let i = 0; i < mirrors.length; i++) {
     const current = mirrors[i];
-    const isOriginal = current === repoUrl;
-    const sourceName = isOriginal ? `${host} 官方` : `${host} 镜像`;
+    const isOriginal = i === 0;
+
+    let sourceName: string;
+    try {
+      sourceName = isOriginal ? host : new URL(current.replace(/^(https?:\/\/[^/]+)\/.*/, "$1")).hostname;
+    } catch {
+      sourceName = `镜像 ${i}`;
+    }
 
     try {
-      if (spinner) spinner.text = `🔍 连接到 ${sourceName}...`;
+      if (spinner) spinner.text = `连接 ${sourceName} ...`;
 
       const downloadUrl = current.endsWith(".zip")
         ? current
         : buildDownloadUrl(current, branch);
 
-      if (spinner) spinner.text = `📦 从 ${sourceName} 下载模板...`;
+      const timeout = isOriginal ? TIMEOUT_PRIMARY : TIMEOUT_MIRROR;
 
-      const response = await fetch(downloadUrl, {
-        signal: AbortSignal.timeout(isOriginal ? 15_000 : 10_000),
-        headers: { "User-Agent": "Robot-CLI" },
-      });
+      if (spinner) spinner.text = `从 ${sourceName} 下载模板 (最多重试${MAX_RETRIES}次)...`;
 
-      if (!response.ok) {
-        if (response.status === 404) throw new Error(`仓库不存在: ${repoUrl}`);
-        throw new Error(`HTTP ${response.status}`);
-      }
+      const response = await fetchWithRetry(downloadUrl, timeout, MAX_RETRIES);
 
       if (spinner) {
         const len = response.headers.get("content-length");
-        const sizeInfo = len
-          ? `${(parseInt(len) / 1024 / 1024).toFixed(1)}MB `
-          : "";
-        spinner.text = `📦 下载中... (${sizeInfo}from ${sourceName})`;
+        const sizeInfo = len ? `${(parseInt(len) / 1024 / 1024).toFixed(1)}MB ` : "";
+        spinner.text = `下载中 ${sizeInfo}(${sourceName})`;
       }
 
       return { response, sourceName };
     } catch (error) {
       if (i === mirrors.length - 1) throw error;
-      if (spinner) spinner.text = `⚠️  ${sourceName} 访问失败，尝试其他源...`;
+      if (spinner) spinner.text = `${sourceName} 不可用，切换下一个源...`;
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
@@ -184,7 +230,7 @@ export async function downloadTemplate(
 
   // ── Try network download ───────────────────────────────────────
   try {
-    if (spinner) spinner.text = "🌐 开始下载最新模板...";
+    if (spinner) spinner.text = "开始下载最新模板...";
 
     const { response, sourceName } = await tryDownload(
       template.repoUrl,
@@ -192,7 +238,7 @@ export async function downloadTemplate(
       spinner,
     );
 
-    if (spinner) spinner.text = "💾 保存下载文件...";
+    if (spinner) spinner.text = "保存下载文件...";
 
     const timestamp = Date.now();
     const tempZip = path.join(os.tmpdir(), `robot-template-${timestamp}.zip`);
@@ -201,10 +247,10 @@ export async function downloadTemplate(
     const buffer = Buffer.from(await response.arrayBuffer());
     await fs.writeFile(tempZip, buffer);
 
-    if (spinner) spinner.text = "📂 解压模板文件...";
+    if (spinner) spinner.text = "解压模板文件...";
     await extract(tempZip, { dir: tempExtract });
 
-    if (spinner) spinner.text = "🔍 查找项目结构...";
+    if (spinner) spinner.text = "查找项目结构...";
     const extractedItems = await fs.readdir(tempExtract);
     const repoName = template.repoUrl.split("/").pop() || "";
     const projectDir = extractedItems.find(
@@ -224,7 +270,7 @@ export async function downloadTemplate(
 
     const sourcePath = path.join(tempExtract, projectDir);
 
-    if (spinner) spinner.text = "✅ 验证模板完整性...";
+    if (spinner) spinner.text = "验证模板完整性...";
     if (!fs.existsSync(path.join(sourcePath, "package.json"))) {
       throw new Error("模板缺少 package.json 文件");
     }
@@ -234,7 +280,7 @@ export async function downloadTemplate(
       saveToCache(template.repoUrl, sourcePath, branch).catch(() => {});
     }
 
-    if (spinner) spinner.text = `🎉 模板下载完成 (via ${sourceName})`;
+    if (spinner) spinner.text = `模板下载完成 (via ${sourceName})`;
 
     await fs.remove(tempZip).catch(() => {});
     return sourcePath;
@@ -243,9 +289,9 @@ export async function downloadTemplate(
     if (!noCache) {
       const cached = await getCachedTemplate(template.repoUrl);
       if (cached) {
-        if (spinner) spinner.text = "📦 网络不可用，使用缓存模板...";
+        if (spinner) spinner.text = "网络不可用，使用缓存模板...";
         console.log();
-        console.log(`  ${chalk.yellow("⚠️  使用缓存版本（非最新）")}`);
+        console.log(`  ${chalk.yellow("  注意: 使用缓存版本（非最新）")}`);
         return cached;
       }
     }
@@ -267,9 +313,9 @@ export async function downloadTemplate(
     let msg = `模板下载失败: ${errMsg}`;
 
     if (isTimeout) {
-      msg += "\n\n💡 建议:\n1. 当前网络连接较慢，请稍后重试\n2. 如果在国内，尝试使用科学上网或配置代理\n3. 使用 --no-cache 强制重新下载";
+      msg += "\n\n  建议:\n  1. 当前网络连接较慢，请稍后重试\n  2. 如果在国内，尝试使用代理或科学上网\n  3. 使用 robot doctor 检查网络连接";
     } else if ((downloadError as NodeJS.ErrnoException).code === "ENOTFOUND") {
-      msg += "\n\n💡 建议:\n1. 检查网络连接\n2. 如果在国内，尝试使用科学上网\n3. 稍后重试";
+      msg += "\n\n  建议:\n  1. 检查网络连接是否正常\n  2. 如果在国内，尝试使用代理\n  3. 稍后重试";
     }
     throw new Error(msg);
   }

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import chalk from "chalk";
-import gradient from "gradient-string";
 import inquirer from "inquirer";
 import { Command } from "commander";
 import { createProject } from "./create";
@@ -36,22 +35,22 @@ const VERSION = getPackageVersion();
 
 // ── Welcome Banner ───────────────────────────────────────────────
 
-const robotGradient = gradient(["#36d1dc", "#5b86e5"]);
-
 function showWelcome(): void {
-  const bannerLines = [
-    "  ╔══════════════════════════════════════════════════╗",
-    "  ║                                                  ║",
-    "  ║         R  O  B  O  T      C  L  I              ║",
-    "  ║                                                  ║",
-    "  ╚══════════════════════════════════════════════════╝",
-  ].join("\n");
+  const supportsColor =
+    process.stdout.isTTY && process.stdout.getColorDepth() > 1;
 
   console.log();
-  console.log(robotGradient.multiline(bannerLines));
-  console.log();
-  console.log(chalk.gray(`      v${VERSION}  ·  工程化项目脚手架`));
-  console.log(chalk.gray("      前端 · 后端 · 移动端 · 桌面端"));
+
+  if (supportsColor) {
+    console.log(chalk.bold.cyan("  R O B O T   C L I"));
+  } else {
+    console.log("  R O B O T   C L I");
+  }
+
+  console.log(
+    chalk.dim(`  v${VERSION}  |  ${chalk.reset.dim("工程化项目脚手架")}`),
+  );
+  console.log(chalk.dim("  前端 / 后端 / 移动端 / 桌面端"));
   console.log();
 }
 

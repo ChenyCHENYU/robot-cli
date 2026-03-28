@@ -77,7 +77,7 @@ export async function createProject(
   if (options.dryRun) {
     console.log();
     console.log(
-      chalk.yellow("🔍 Dry Run 模式 - 以下为预览信息，未实际执行任何操作:"),
+      chalk.yellow("Dry Run 模式 - 以下为预览信息，未实际执行任何操作:"),
     );
     console.log();
     console.log(`  项目路径: ${chalk.cyan(path.resolve(finalProjectName))}`);
@@ -117,7 +117,7 @@ async function handleProjectName(
   if (projectName) {
     const v = validateProjectName(projectName);
     if (!v.valid) {
-      console.log(chalk.red("❌ 项目名称不合法:"));
+      console.log(chalk.red("项目名称不合法:"));
       v.errors.forEach((e) => console.log(chalk.red(`   ${e}`)));
       console.log();
 
@@ -172,7 +172,7 @@ async function selectTemplate(
     if (all[templateOption]) {
       return { key: templateOption, ...all[templateOption] };
     }
-    console.log(chalk.yellow(`⚠️  模板 "${templateOption}" 不存在`));
+    console.log(chalk.yellow(`模板 "${templateOption}" 不存在`));
     console.log();
   }
   return await selectTemplateMethod();
@@ -231,7 +231,7 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
   const recommended = getRecommendedTemplates();
 
   if (Object.keys(recommended).length === 0) {
-    console.log(chalk.yellow("⚠️  暂无推荐模板"));
+    console.log(chalk.yellow("暂无推荐模板"));
     return await selectTemplateMethod();
   }
 
@@ -731,7 +731,7 @@ async function executeCreation(
     throw new Error(`模板数据无效: ${JSON.stringify(template)}`);
 
   const spinner = ora({
-    text: "🚀 准备创建项目...",
+    text: "准备创建项目...",
     spinner: "dots",
     color: "cyan",
   }).start();
@@ -739,12 +739,12 @@ async function executeCreation(
 
   try {
     // 1. Check directory
-    spinner.text = "📁 检查项目目录...";
+    spinner.text = "检查项目目录...";
     const projectPath = path.resolve(projectName);
 
     if (fs.existsSync(projectPath)) {
       spinner.stop();
-      console.log(chalk.yellow("⚠️  项目目录已存在"));
+      console.log(chalk.yellow("项目目录已存在"));
 
       const { overwrite } = await inquirer.prompt<{ overwrite: boolean }>([
         {
@@ -756,17 +756,17 @@ async function executeCreation(
       ]);
 
       if (!overwrite) {
-        console.log(chalk.yellow("❌ 取消创建"));
+        console.log(chalk.yellow("取消创建"));
         process.exit(0);
       }
 
-      spinner.start("🗑️  清理现有目录...");
+      spinner.start("清理现有目录...");
       await fs.remove(projectPath);
-      spinner.text = "📁 准备创建新目录...";
+      spinner.text = "准备创建新目录...";
     }
 
     // 2. Download template
-    spinner.text = "🌐 下载最新模板...";
+    spinner.text = "下载最新模板...";
     try {
       tempPath = await downloadTemplate(template, {
         spinner,
@@ -775,41 +775,41 @@ async function executeCreation(
       if (!tempPath || !fs.existsSync(tempPath))
         throw new Error(`模板路径无效: ${tempPath}`);
     } catch (error) {
+      // 只在这里处理下载错误，不再向上抛出到外层 catch
       spinner.fail("模板下载失败");
       console.log();
-      console.log(chalk.red("❌ 模板下载错误:"));
-      console.log(chalk.dim(`   ${(error as Error).message}`));
+      console.log(chalk.dim(`  ${(error as Error).message}`));
       console.log();
-      throw error;
+      return;
     }
 
     // 3. Copy template
     await copyTemplate(tempPath, projectPath, spinner);
 
     // 4. Process config
-    spinner.text = "⚙️  处理项目配置...";
+    spinner.text = "处理项目配置...";
     await processProjectConfig(projectPath, projectName, template, config);
 
     // 5. Git init
     if (config.initGit) {
-      spinner.text = "📝 初始化 Git 仓库...";
+      spinner.text = "初始化 Git 仓库...";
       initializeGitRepository(projectPath);
     }
 
     // 6. Install dependencies
     if (config.installDeps) {
-      spinner.text = `📦 使用 ${config.packageManager} 安装依赖...`;
+      spinner.text = `使用 ${config.packageManager} 安装依赖...`;
       await installDependencies(projectPath, spinner, config.packageManager);
     }
 
     // 7. Clean up temp
     if (tempPath) {
-      spinner.text = "🧹 清理临时文件...";
+      spinner.text = "清理临时文件...";
       await fs.remove(tempPath).catch(() => {});
     }
 
     // 8. Done!
-    spinner.succeed(chalk.green("🎉 项目创建成功!"));
+    spinner.succeed(chalk.green("项目创建成功!"));
 
     console.log();
     console.log(chalk.green("项目创建完成!"));
@@ -844,7 +844,7 @@ async function executeCreation(
     console.log();
 
     // Stats
-    spinner.start("📊 统计项目信息...");
+    spinner.start("统计项目信息...");
     const stats = await generateProjectStats(projectPath);
     spinner.stop();
     if (stats) {
@@ -908,7 +908,7 @@ function initializeGitRepository(projectPath: string): void {
       stdio: "ignore",
     });
   } catch {
-    console.log(chalk.yellow("⚠️  Git 不可用，跳过仓库初始化"));
+    console.log(chalk.yellow("Git 不可用，跳过仓库初始化"));
   }
 }
 

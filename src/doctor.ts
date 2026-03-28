@@ -95,9 +95,9 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // Display results
   const icons = {
-    ok: chalk.green("✅"),
-    warn: chalk.yellow("⚠️ "),
-    error: chalk.red("❌"),
+    ok: chalk.green("[OK]"),
+    warn: chalk.yellow("[!!]"),
+    error: chalk.red("[NO]"),
   };
 
   for (const r of results) {
@@ -112,11 +112,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const hasWarn = results.some((r) => r.status === "warn");
 
   if (hasError) {
-    console.log(chalk.red("  诊断结果: 环境存在问题，请修复上述错误 ❌"));
+    console.log(chalk.red("  诊断结果: 环境存在问题，请修复上述错误"));
   } else if (hasWarn) {
-    console.log(chalk.yellow("  诊断结果: 环境基本正常，部分组件缺失 ⚠️"));
+    console.log(chalk.yellow("  诊断结果: 环境基本正常，部分组件缺失"));
   } else {
-    console.log(chalk.green("  诊断结果: 环境健康 ✅"));
+    console.log(chalk.green("  诊断结果: 环境健康"));
   }
   console.log();
 

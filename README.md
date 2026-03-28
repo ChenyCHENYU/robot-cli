@@ -1,4 +1,4 @@
-# 🤖 Robot CLI
+# Robot CLI
 
 > **现代化工程脚手架** — 一条命令，60 秒搭建标准化项目
 
@@ -10,17 +10,17 @@
 
 ## 目录
 
-- [快速开始](#-快速开始)
-- [模板一览](#-模板一览)
-- [命令详解](#-命令详解)
-- [进阶用法](#-进阶用法)
-- [项目结构](#-项目结构)
-- [二次开发指南](#-二次开发指南)
-- [常见问题](#-常见问题)
+- [快速开始](#快速开始)
+- [模板一览](#模板一览)
+- [命令详解](#命令详解)
+- [进阶用法](#进阶用法)
+- [项目结构](#项目结构)
+- [二次开发指南](#二次开发指南)
+- [常见问题](#常见问题)
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ### 安装
 
@@ -49,9 +49,9 @@ npx @agile-team/robot-cli create my-project
 
 ---
 
-## 📋 模板一览
+## 模板一览
 
-### 🎨 前端项目（Vue.js）
+### 前端项目（Vue.js）
 
 | 模板 Key | 名称 | 架构模式 | 说明 |
 |---------|------|---------|------|
@@ -64,21 +64,21 @@ npx @agile-team/robot-cli create my-project
 > **前端模板源码仓库**：[ChenyCHENYU/Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)
 > 不同架构通过分支区分：`main`（全量）、`monorepo`、`micro-app`、`module-federation`
 
-### 🎨 前端项目（React.js）
+### 前端项目（React.js）
 
 | 模板 Key | 名称 | 说明 |
 |---------|------|------|
 | `robot-react` | Robot React 完整版 | Ant Design + 完整功能演示 |
 | `robot-react-base` | Robot React 精简版 | 基础 React + 核心功能 |
 
-### 📱 移动端项目
+### 移动端项目
 
 | 模板 Key | 名称 | 说明 |
 |---------|------|------|
 | `robot-uniapp` | Robot uni-app 完整版 | 多端适配（小程序/H5/App）+ 完整示例 |
 | `robot-uniapp-base` | Robot uni-app 精简版 | 基础框架 + 核心功能 |
 
-### 🚀 后端项目
+### 后端项目
 
 | 模板 Key | 名称 | 说明 |
 |---------|------|------|
@@ -86,7 +86,7 @@ npx @agile-team/robot-cli create my-project
 | `robot-nest-base` | Robot NestJS 精简版 | 基础 NestJS + 核心模块 |
 | `robot-nest-micro` | Robot NestJS 微服务 | gRPC + 服务发现 |
 
-### 💻 桌面端项目
+### 桌面端项目
 
 | 模板 Key | 名称 | 说明 |
 |---------|------|------|
@@ -95,7 +95,7 @@ npx @agile-team/robot-cli create my-project
 
 ---
 
-## 📖 命令详解
+## 命令详解
 
 ### `robot create [project-name]` — 创建项目
 
@@ -151,7 +151,7 @@ robot doctor --clear-cache  # 清理模板缓存
 
 ---
 
-## 🔧 进阶用法
+## 进阶用法
 
 ### 包管理器优先级
 
@@ -159,10 +159,10 @@ robot doctor --clear-cache  # 清理模板缓存
 
 | 优先级 | 包管理器 | 说明 |
 |--------|---------|------|
-| 🥇 | **bun** | 极速安装，现代化 |
-| 🥈 | **pnpm** | 快速安装，节省磁盘 |
-| 🥉 | **yarn** | 兼容性好 |
-| 4️⃣ | **npm** | Node.js 内置 |
+| 1 | **bun** | 极速安装，现代化 |
+| 2 | **pnpm** | 快速安装，节省磁盘 |
+| 3 | **yarn** | 兼容性好 |
+| 4 | **npm** | Node.js 内置 |
 
 ### 离线缓存
 
@@ -190,7 +190,7 @@ robot create my-app --from https://gitee.com/your-org/your-template
 
 ---
 
-## 🗂 项目结构
+## 项目结构
 
 ```
 robot-cli/
@@ -225,7 +225,7 @@ robot-cli/
 
 ---
 
-## 🛠 二次开发指南
+## 二次开发指南
 
 ### 1. 克隆 & 启动
 
@@ -305,7 +305,7 @@ npm publish --access public
 
 ---
 
-## ❓ 常见问题
+## 常见问题
 
 **Q: 提示 `command not found: robot`**
 ```bash
@@ -333,15 +333,15 @@ robot create my-app --no-cache      # 跳过缓存重试
 
 ---
 
-## 🤝 贡献
+## 贡献
 
 欢迎提交 Issues 和 Pull Requests！
 
-## 📜 许可证
+## 许可证
 
 MIT License
 
-## 🔗 链接
+## 链接
 
 - [GitHub](https://github.com/ChenyCHENYU/robot-cli)
 - [npm](https://www.npmjs.com/package/@agile-team/robot-cli)

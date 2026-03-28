@@ -5,7 +5,7 @@ import type { TemplateCategories } from "../types";
 
 export const TEMPLATE_CATEGORIES: TemplateCategories = {
   frontend: {
-    name: "🎨 前端项目",
+    name: "前端项目",
     stacks: {
       vue: {
         name: "Vue.js",
@@ -46,12 +46,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                 description: "bun workspace + Monorepo 多包管理架构",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
                 branch: "monorepo",
-                features: [
-                  "bun workspace",
-                  "Monorepo",
-                  "多包管理",
-                  "共享组件",
-                ],
+                features: ["bun workspace", "Monorepo", "多包管理", "共享组件"],
                 version: "full",
               },
             },
@@ -64,12 +59,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                 description: "基于 MicroApp 的微前端架构方案",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
                 branch: "micro-app",
-                features: [
-                  "MicroApp",
-                  "微前端",
-                  "主子应用",
-                  "路由共享",
-                ],
+                features: ["MicroApp", "微前端", "主子应用", "路由共享"],
                 version: "full",
               },
               "robot-module-federation": {
@@ -77,12 +67,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                 description: "基于 Vite Module Federation 的模块联邦方案",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
                 branch: "module-federation",
-                features: [
-                  "Module Federation",
-                  "模块联邦",
-                  "Vite",
-                  "远程模块",
-                ],
+                features: ["Module Federation", "模块联邦", "Vite", "远程模块"],
                 version: "full",
               },
             },
@@ -116,7 +101,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
     },
   },
   mobile: {
-    name: "📱 移动端项目",
+    name: "移动端项目",
     stacks: {
       uniapp: {
         name: "uni-app",
@@ -145,7 +130,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
     },
   },
   backend: {
-    name: "🚀 后端项目",
+    name: "后端项目",
     stacks: {
       nestjs: {
         name: "NestJS",
@@ -194,7 +179,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
     },
   },
   desktop: {
-    name: "💻 桌面端项目",
+    name: "桌面端项目",
     stacks: {
       electron: {
         name: "Electron",

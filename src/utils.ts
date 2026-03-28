@@ -147,9 +147,9 @@ export async function copyTemplate(
 
   await fs.ensureDir(targetPath);
 
-  if (spinner) spinner.text = "📊 统计文件数量...";
+  if (spinner) spinner.text = "统计文件数量...";
   const totalFiles = await countFiles(sourcePath);
-  if (spinner) spinner.text = `📋 开始复制 ${totalFiles} 个文件...`;
+  if (spinner) spinner.text = `开始复制 ${totalFiles} 个文件...`;
 
   let copied = 0;
   const skipDirs = new Set([
@@ -176,14 +176,14 @@ export async function copyTemplate(
         copied++;
         if (spinner && (copied % 10 === 0 || copied === totalFiles)) {
           const pct = Math.round((copied / totalFiles) * 100);
-          spinner.text = `📋 复制中... ${copied}/${totalFiles} (${pct}%)`;
+          spinner.text = `复制中 ${copied}/${totalFiles} (${pct}%)`;
         }
       }
     }
   }
 
   await copyDir(sourcePath, targetPath);
-  if (spinner) spinner.text = `✅ 文件复制完成 (${copied} 个文件)`;
+  if (spinner) spinner.text = `文件复制完成 (${copied} 个文件)`;
 }
 
 export async function installDependencies(
@@ -194,7 +194,7 @@ export async function installDependencies(
   try {
     const pkgJson = path.join(projectPath, "package.json");
     if (!fs.existsSync(pkgJson)) {
-      if (spinner) spinner.text = "⚠️  跳过依赖安装 (无 package.json)";
+      if (spinner) spinner.text = "跳过依赖安装 (无 package.json)";
       return;
     }
 
@@ -205,7 +205,7 @@ export async function installDependencies(
       npm: "npm install",
     };
 
-    if (spinner) spinner.text = `📦 使用 ${packageManager} 安装依赖...`;
+    if (spinner) spinner.text = `使用 ${packageManager} 安装依赖...`;
 
     execSync(cmds[packageManager], {
       cwd: projectPath,
@@ -213,14 +213,14 @@ export async function installDependencies(
       timeout: 300_000,
     });
 
-    if (spinner) spinner.text = `✅ 依赖安装完成 (${packageManager})`;
+    if (spinner) spinner.text = `依赖安装完成 (${packageManager})`;
   } catch (error) {
-    if (spinner) spinner.text = "⚠️  依赖安装失败，请手动安装";
+    if (spinner) spinner.text = "依赖安装失败，请手动安装";
     console.log();
-    console.log(chalk.yellow("⚠️  自动安装依赖失败"));
+    console.log(chalk.yellow("自动安装依赖失败"));
     console.log(chalk.dim(`   错误: ${(error as Error).message}`));
     console.log();
-    console.log(chalk.blue("💡 请手动安装:"));
+    console.log(chalk.blue("请手动安装:"));
     console.log(chalk.cyan(`   cd ${path.basename(projectPath)}`));
     console.log(chalk.cyan(`   ${packageManager} install`));
     console.log();
@@ -268,7 +268,7 @@ export async function generateProjectStats(
 }
 
 export function printProjectStats(stats: ProjectStats): void {
-  console.log(chalk.blue("📊 项目统计:"));
+  console.log(chalk.blue("项目统计:"));
   console.log(`   文件数量: ${chalk.cyan(String(stats.files))} 个`);
   console.log(`   目录数量: ${chalk.cyan(String(stats.directories))} 个`);
   console.log(`   项目大小: ${chalk.cyan(formatBytes(stats.size))}`);

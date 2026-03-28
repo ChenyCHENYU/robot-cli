@@ -5,7 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] - 2026-03-28
+## [2.3.0] - 2026-03-28
+
+### Fixed (Root-Cause)
+
+- **下载超时**：超时时间从 15s → 120s（主站）/ 60s（镜像），适配中国网络环境
+- **下载无重试**：新增 `fetchWithRetry()`，每个源最多重试 3 次，指数退避（2s→4s）
+- **镜像失效**：从 1 个已失效的 `ghproxy.com` → 3 个源（`github.com` + `gitmirror` + `ghproxy.net`）
+- **双重报错**：下载失败后内外两层 catch 都打印错误 → 内层 return 终止，只输出一次
+- **Windows emoji 乱码**：全面移除所有源文件中的 emoji，分类名 / spinner.text / doctor 输出全部改为纯文本 + chalk 着色
+
+### Changed
+
+- Banner 从 `gradient-string` 多行 Unicode 框线 → `chalk.bold.cyan` 极简纯文本（参考 create-vue）
+- 移除 `gradient-string` 依赖（减小包体积）
+- doctor 诊断图标从 emoji → ASCII `[OK]` / `[!!]` / `[NO]`
+- package.json description 移除 emoji 前缀
+
+## [2.2.0] - 2026-03-28
 
 ### ⚠️ BREAKING CHANGES
 
