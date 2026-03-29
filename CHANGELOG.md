@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.6] - 2026-03-29
+
+### Fixed
+
+- **修复推荐模板引用不存在的仓库** — 移除 `robot-nest`、`robot-react`，替换为已上线的 `robot-uniapp`
+- **项目统计美化** — 从丑陋的逐行列表改为紧凑的两行面板（文件/目录/大小 + 文件类型分布）
+
+### Changed
+
+- **全面重写 README** — 聚焦已上线能力，移除未上线模板列表，精简到关键信息
+- **重写 ROADMAP** — 聚焦后置配置系统方案（含 `robot.config.json` 规范）和模板上线计划，去掉空洞的对比分析
+
 ## [3.0.4] - 2026-03-29
 
 ### Changed (Breaking)

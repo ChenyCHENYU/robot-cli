@@ -268,21 +268,27 @@ export async function generateProjectStats(
 }
 
 export function printProjectStats(stats: ProjectStats): void {
-  console.log(chalk.blue("项目统计:"));
-  console.log(`   文件数量: ${chalk.cyan(String(stats.files))} 个`);
-  console.log(`   目录数量: ${chalk.cyan(String(stats.directories))} 个`);
-  console.log(`   项目大小: ${chalk.cyan(formatBytes(stats.size))}`);
-
   const top = Object.entries(stats.fileTypes)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5);
 
+  const lines: string[] = [
+    `${chalk.dim("文件")}  ${chalk.cyan(String(stats.files))} 个    ${chalk.dim("目录")}  ${chalk.cyan(String(stats.directories))} 个    ${chalk.dim("大小")}  ${chalk.cyan(formatBytes(stats.size))}`,
+  ];
+
   if (top.length > 0) {
-    console.log("   主要文件类型:");
-    for (const [ext, count] of top) {
-      console.log(`     ${ext}: ${chalk.cyan(String(count))} 个`);
-    }
+    const typeParts = top.map(
+      ([ext, count]) => `${chalk.dim(ext)} ${chalk.cyan(String(count))}`,
+    );
+    lines.push(`${chalk.dim("类型")}  ${typeParts.join(chalk.dim("  |  "))}`);
   }
+
+  // 使用 @clack/prompts 的 note 风格输出框
+  const bar = chalk.dim("─".repeat(60));
+  console.log(bar);
+  console.log(chalk.bold("  项目概况"));
+  lines.forEach((l) => console.log(`  ${l}`));
+  console.log(bar);
 }
 
 export function formatBytes(bytes: number): string {

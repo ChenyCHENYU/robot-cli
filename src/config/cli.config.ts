@@ -15,14 +15,13 @@ export const VERSION_LABELS: Record<string, string> = {
   micro: "微服务版",
 };
 
-/** 推荐模板 key 列表 */
+/** 推荐模板 key 列表（仅包含已上线的模板） */
 export const RECOMMENDED_TEMPLATE_KEYS = [
   "robot-admin",
   "robot-monorepo",
   "robot-micro-app",
   "robot-module-federation",
-  "robot-nest",
-  "robot-react",
+  "robot-uniapp",
 ];
 
 /** 模板 key → 启动脚本名 映射 */
