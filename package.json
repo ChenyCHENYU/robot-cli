@@ -1,6 +1,6 @@
 {
   "name": "@agile-team/robot-cli",
-  "version": "3.0.6",
+  "version": "3.1.0",
   "description": "现代化项目脚手架工具，支持多技术栈快速创建项目 - 优先 bun，兼容 npm/pnpm/yarn",
   "type": "module",
   "bin": {

@@ -23,6 +23,13 @@ import {
   getGitUser,
 } from "./utils";
 import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
+import {
+  isTrimmableTemplate,
+  selectTrimMode,
+  executeTrimming,
+  getTrimSummary,
+  type TrimSelection,
+} from "./trimmer";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -32,7 +39,9 @@ const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
 function filterAvailable<T extends { status?: string }>(
   map: Record<string, T>,
 ): Record<string, T> {
-  return Object.fromEntries(Object.entries(map).filter(([, t]) => t.status !== "coming-soon"));
+  return Object.fromEntries(
+    Object.entries(map).filter(([, t]) => t.status !== "coming-soon"),
+  );
 }
 
 // ── Main Entry ───────────────────────────────────────────────────
@@ -65,13 +74,24 @@ export async function createProject(
   // 2. Handle project name
   const finalProjectName = await handleProjectName(projectName, template);
 
-  // 3. Project configuration
+  // 3. Template configuration (trimming) — only for robot-admin main branch
+  let trimSelection: TrimSelection | undefined;
+  if (isTrimmableTemplate(template)) {
+    trimSelection = await selectTrimMode();
+  }
+
+  // 4. Project configuration
   const projectConfig = await configureProject(options);
 
-  // 4. Confirm creation
-  await confirmCreation(finalProjectName, template, projectConfig);
+  // 5. Confirm creation
+  await confirmCreation(
+    finalProjectName,
+    template,
+    projectConfig,
+    trimSelection,
+  );
 
-  // 5. Dry-run mode
+  // 6. Dry-run mode
   if (options.dryRun) {
     console.log();
     console.log(
@@ -80,13 +100,23 @@ export async function createProject(
     console.log();
     console.log(`  项目路径: ${chalk.cyan(path.resolve(finalProjectName))}`);
     console.log(`  下载来源: ${chalk.dim(template.repoUrl)}`);
+    if (trimSelection) {
+      console.log(`  模板配置: ${chalk.cyan(getTrimSummary(trimSelection))}`);
+    }
     console.log("  执行步骤:");
     console.log(chalk.dim(`    1. 从 ${template.repoUrl} 下载最新模板`));
     console.log(chalk.dim(`    2. 解压并复制到 ./${finalProjectName}`));
+    if (trimSelection && trimSelection.mode !== "full") {
+      console.log(
+        chalk.dim(`    3. 执行模板裁剪 (${getTrimSummary(trimSelection)})`),
+      );
+    }
     console.log(
-      chalk.dim("    3. 更新 package.json (name, description, author)"),
+      chalk.dim(
+        `    ${trimSelection && trimSelection.mode !== "full" ? 4 : 3}. 更新 package.json (name, description, author)`,
+      ),
     );
-    let step = 4;
+    let step = trimSelection && trimSelection.mode !== "full" ? 5 : 4;
     if (projectConfig.initGit) {
       console.log(chalk.dim(`    ${step}. 初始化 Git 仓库并提交初始代码`));
       step++;
@@ -102,8 +132,14 @@ export async function createProject(
     return;
   }
 
-  // 6. Execute creation
-  await executeCreation(finalProjectName, template, projectConfig, options);
+  // 7. Execute creation
+  await executeCreation(
+    finalProjectName,
+    template,
+    projectConfig,
+    options,
+    trimSelection,
+  );
 }
 
 // ── Project Name ─────────────────────────────────────────────────
@@ -176,8 +212,16 @@ async function selectTemplateMethod(): Promise<SelectedTemplate> {
   const selectionMode = await p.select({
     message: "模板选择方式:",
     options: [
-      { value: "recommended", label: "推荐模板", hint: "基于团队使用频率推荐的热门模板" },
-      { value: "category", label: "分类浏览", hint: "前端、后端、移动端、桌面端分类" },
+      {
+        value: "recommended",
+        label: "推荐模板",
+        hint: "基于团队使用频率推荐的热门模板",
+      },
+      {
+        value: "category",
+        label: "分类浏览",
+        hint: "前端、后端、移动端、桌面端分类",
+      },
       { value: "search", label: "关键词搜索", hint: "按技术栈、功能特性查找" },
       { value: "all", label: "全部模板", hint: "查看所有可用模板" },
     ],
@@ -209,7 +253,9 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
     return await selectTemplateMethod();
   }
 
-  p.log.info(chalk.bold("推荐模板") + chalk.dim(" — 基于团队使用频率和项目成熟度推荐"));
+  p.log.info(
+    chalk.bold("推荐模板") + chalk.dim(" — 基于团队使用频率和项目成熟度推荐"),
+  );
 
   const options: { value: string; label: string; hint?: string }[] = [];
 
@@ -310,10 +356,13 @@ async function selectByCategory(): Promise<SelectedTemplate> {
     // Step 4: Select template
     const allTemplates = getTemplatesByCategory(catKey, stackKey, patternKey);
     const templates = filterAvailable(allTemplates);
-    const comingSoonCount = Object.keys(allTemplates).length - Object.keys(templates).length;
+    const comingSoonCount =
+      Object.keys(allTemplates).length - Object.keys(templates).length;
 
     if (Object.keys(templates).length === 0) {
-      const names = Object.values(allTemplates).map((t) => t.name).join("、");
+      const names = Object.values(allTemplates)
+        .map((t) => t.name)
+        .join("、");
       p.log.warn(`该分类下的模板正在建设中，敬请期待 (${names})`);
       await new Promise((r) => setTimeout(r, 600));
       continue;
@@ -379,11 +428,14 @@ async function selectBySearch(): Promise<SelectedTemplate> {
         ],
       });
 
-      if (p.isCancel(action) || action === "back") return await selectTemplateMethod();
+      if (p.isCancel(action) || action === "back")
+        return await selectTemplateMethod();
       continue;
     }
 
-    p.log.info(`关键词: "${keyword}" -- 找到 ${Object.keys(availableResults).length} 个匹配模板`);
+    p.log.info(
+      `关键词: "${keyword}" -- 找到 ${Object.keys(availableResults).length} 个匹配模板`,
+    );
 
     const options: { value: string; label: string; hint?: string }[] = [];
 
@@ -421,11 +473,17 @@ async function selectBySearch(): Promise<SelectedTemplate> {
 async function selectFromAll(): Promise<SelectedTemplate> {
   const allTemplates = getAllTemplates();
   const availableTemplates = filterAvailable(allTemplates);
-  const comingSoonCount = Object.keys(allTemplates).length - Object.keys(availableTemplates).length;
+  const comingSoonCount =
+    Object.keys(allTemplates).length - Object.keys(availableTemplates).length;
 
-  const countInfo = comingSoonCount > 0
-    ? chalk.dim(` -- 共 ${Object.keys(availableTemplates).length} 个可用，${comingSoonCount} 个开发中`)
-    : chalk.dim(` -- 共 ${Object.keys(availableTemplates).length} 个模板可选`);
+  const countInfo =
+    comingSoonCount > 0
+      ? chalk.dim(
+          ` -- 共 ${Object.keys(availableTemplates).length} 个可用，${comingSoonCount} 个开发中`,
+        )
+      : chalk.dim(
+          ` -- 共 ${Object.keys(availableTemplates).length} 个模板可选`,
+        );
   p.log.info(chalk.bold("所有可用模板") + countInfo);
 
   const options: { value: string; label: string; hint?: string }[] = [];
@@ -486,11 +544,20 @@ async function configureProject(
   let packageManager = hasBun ? "bun" : hasPnpm ? "pnpm" : "npm";
 
   if (installDeps) {
-    const managerOptions: { value: string; label: string; hint?: string }[] = [];
+    const managerOptions: { value: string; label: string; hint?: string }[] =
+      [];
     if (available.includes("bun"))
-      managerOptions.push({ value: "bun", label: "bun", hint: "推荐 - 极速安装" });
+      managerOptions.push({
+        value: "bun",
+        label: "bun",
+        hint: "推荐 - 极速安装",
+      });
     if (available.includes("pnpm"))
-      managerOptions.push({ value: "pnpm", label: "pnpm", hint: "推荐 - 节省磁盘空间" });
+      managerOptions.push({
+        value: "pnpm",
+        label: "pnpm",
+        hint: "推荐 - 节省磁盘空间",
+      });
     if (available.includes("yarn"))
       managerOptions.push({ value: "yarn", label: "yarn", hint: "兼容性好" });
     if (available.includes("npm"))
@@ -543,21 +610,30 @@ async function confirmCreation(
   projectName: string,
   template: SelectedTemplate,
   config: ProjectConfig,
+  trimSelection?: TrimSelection,
 ): Promise<void> {
-  p.note(
-    [
-      `${chalk.dim("项目名称:")} ${chalk.cyan(projectName)}`,
-      `${chalk.dim("选择模板:")} ${chalk.cyan(template.name)}`,
-      `${chalk.dim("模板描述:")} ${template.description}`,
-      `${chalk.dim("包含功能:")} ${template.features.join(", ") || "自定义模板"}`,
-      config.description ? `${chalk.dim("项目描述:")} ${config.description}` : "",
-      config.author ? `${chalk.dim("作    者:")} ${config.author}` : "",
-      `${chalk.dim("初始化Git:")} ${config.initGit ? chalk.green("是") : "否"}`,
-      `${chalk.dim("安装依赖:")} ${config.installDeps ? chalk.green("是") + ` (${config.packageManager})` : "否"}`,
-      `${chalk.dim("源码仓库:")} ${template.repoUrl}`,
-    ].filter(Boolean).join("\n"),
-    "项目创建信息确认",
+  const lines = [
+    `${chalk.dim("项目名称:")} ${chalk.cyan(projectName)}`,
+    `${chalk.dim("选择模板:")} ${chalk.cyan(template.name)}`,
+    `${chalk.dim("模板描述:")} ${template.description}`,
+    `${chalk.dim("包含功能:")} ${template.features.join(", ") || "自定义模板"}`,
+  ];
+
+  if (trimSelection) {
+    lines.push(
+      `${chalk.dim("模板配置:")} ${chalk.cyan(getTrimSummary(trimSelection))}`,
+    );
+  }
+
+  lines.push(
+    config.description ? `${chalk.dim("项目描述:")} ${config.description}` : "",
+    config.author ? `${chalk.dim("作    者:")} ${config.author}` : "",
+    `${chalk.dim("初始化Git:")} ${config.initGit ? chalk.green("是") : "否"}`,
+    `${chalk.dim("安装依赖:")} ${config.installDeps ? chalk.green("是") + ` (${config.packageManager})` : "否"}`,
+    `${chalk.dim("源码仓库:")} ${template.repoUrl}`,
   );
+
+  p.note(lines.filter(Boolean).join("\n"), "项目创建信息确认");
 
   const confirmed = await p.confirm({
     message: "确认创建项目?",
@@ -577,6 +653,7 @@ async function executeCreation(
   template: SelectedTemplate,
   config: ProjectConfig,
   options: CreateOptions,
+  trimSelection?: TrimSelection,
 ): Promise<void> {
   if (!projectName) throw new Error(`项目名称无效: ${projectName}`);
   if (!template?.name)
@@ -633,6 +710,12 @@ async function executeCreation(
 
     // 3. Copy template
     await copyTemplate(tempPath, projectPath, spinner);
+
+    // 3.5. Execute trimming (if applicable)
+    if (trimSelection && trimSelection.mode !== "full") {
+      spinner.text = "执行模板裁剪...";
+      await executeTrimming(projectPath, trimSelection, spinner);
+    }
 
     // 4. Process config
     spinner.text = "处理项目配置...";

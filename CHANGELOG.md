@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.0] - 2026-03-30
+
+### Added
+
+- **模板配置系统** — Robot Admin 完整版支持 Full / Lite / Custom 三档配置模式
+  - **Full（完整版）**：保留全部 74 个页面和功能，等同于直接 clone 主分支
+  - **Lite（精简版）⭐**：移除 56 个演示页面 + 仪表盘 + i18n + 统计 + 可选包 + 3D 背景等，保留核心业务框架 + 系统管理
+  - **Custom（自定义）**：用户逐项选择要保留的页面模块（4 项）、功能模块（3 项）、@robot-admin 可选包（4 项）
+- **11 个可裁剪模块**：演示页面、仪表盘、系统管理、外部页面、国际化、登录 3D、Vercel Analytics、directives、file-utils、form-validate、git-standards
+- **零使用依赖自动清理**：无论选择何种模式，vue-command-palette 和 motion-v 始终被清理
+- **裁剪引擎**：自动处理目录/文件删除、package.json 依赖移除、dynamicRouter.json 路由裁剪、源码修改（main.ts / plugins / vite.config 等）
+- **19 个新增单元测试**：覆盖所有裁剪组、模板识别、模式选择、容错处理
+
+### Changed
+
+- 确认面板新增「模板配置」行，显示当前裁剪模式摘要
+- Dry-run 模式新增裁剪步骤预览
+- 单元测试总数从 33 增至 52
+- 更新 README 为中英文双语（默认中文）
+- 更新 ROADMAP，v3.1 标记为已上线
+
 ## [3.0.6] - 2026-03-29
 
 ### Fixed

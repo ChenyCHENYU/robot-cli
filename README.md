@@ -8,6 +8,8 @@
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+**中文** | [English](#english)
+
 </div>
 
 ---
@@ -15,6 +17,7 @@
 ## 为什么用 Robot CLI
 
 - **5 个生产就绪模板**：Vue 全栈 (Admin / Monorepo / 微前端 / 模块联邦) + uni-app 多端，更多模板持续上线
+- **模板配置系统**：Robot Admin 支持 Full / Lite / Custom 三档配置，按需裁剪演示页面和可选功能
 - **秒级下载**：`git clone --depth=1` 引擎，和 create-vue / degit 同方案，自动走系统代理
 - **国内友好**：Gitee 优先 → GitHub 兜底 → HTTP ZIP 二次兜底，三层容错
 - **现代交互**：基于 @clack/prompts，4 种选模板方式，实时进度条，确认面板
@@ -35,6 +38,27 @@ bunx @agile-team/robot-cli create my-project
 npm i -g @agile-team/robot-cli
 robot create
 ```
+
+---
+
+## 模板配置系统
+
+选择 **Robot Admin 完整版** 时，CLI 会自动询问模板配置模式：
+
+```
+◆  选择模板配置:
+│  ○ 完整版（Full）- 包含所有演示页面和功能模块
+│  ● 精简版（Lite）- 移除演示页面，保留核心业务框架  ⭐ 推荐
+│  ○ 自定义（Custom）- 自行选择要保留的模块
+```
+
+| 模式 | 说明 | 适用场景 |
+|------|------|---------|
+| **Full** | 保留全部 74 个页面、所有功能和依赖 | 学习参考、功能演示 |
+| **Lite** ⭐ | 移除 56 个演示页面 + 仪表盘 + i18n + 3D 背景等，保留核心业务框架 + 系统管理 | 实际项目开发 |
+| **Custom** | 逐项选择要保留的页面模块、功能模块、可选包 | 定制化需求 |
+
+> 裁剪在模板下载后自动执行，其他模板不受影响，现有 CLI 功能完全不变。
 
 ---
 
@@ -125,10 +149,12 @@ robot-cli/
 │   ├── doctor.ts                   # 环境诊断
 │   ├── utils.ts                    # 工具函数
 │   ├── types.ts                    # 类型定义
+│   ├── trimmer/
+│   │   └── index.ts                # 模板配置裁剪引擎
 │   └── config/
 │       ├── templates.config.ts     # 模板注册表（所有模板定义在这里）
 │       └── cli.config.ts           # CLI 配置（推荐列表、启动命令等）
-├── tests/                          # Vitest 单元测试
+├── tests/                          # Vitest 单元测试（52 个）
 ├── tsup.config.ts                  # 构建配置（ESM, node20）
 └── .github/workflows/              # CI: PR 检查 + tag 发布
 ```
@@ -216,6 +242,146 @@ npm i -g @agile-team/robot-cli
 - [模板仓库 Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)
 - [路线图](ROADMAP.md)
 - [更新日志](CHANGELOG.md)
+
+---
+
+<a name="english"></a>
+
+<div align="center">
+
+# Robot CLI
+
+**One command to scaffold production-ready projects**
+
+[![npm](https://img.shields.io/npm/v/@agile-team/robot-cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agile-team/robot-cli)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+[中文](#) | **English**
+
+</div>
+
+---
+
+## Why Robot CLI
+
+- **5 production-ready templates**: Vue full-stack (Admin / Monorepo / Micro-frontend / Module Federation) + uni-app cross-platform
+- **Template configuration system**: Robot Admin supports Full / Lite / Custom modes — trim demo pages and optional features on demand
+- **Instant download**: `git clone --depth=1` engine, same approach as create-vue / degit, inherits system proxy
+- **China-friendly**: Gitee first → GitHub fallback → HTTP ZIP fallback, triple fault-tolerance
+- **Modern UX**: @clack/prompts, 4 template selection modes, real-time progress, confirmation panels
+- **Offline support**: Auto-cached after first download, works without internet
+- **Zero config**: Auto-detects bun/pnpm/yarn/npm, auto-inits Git, works out of the box
+
+---
+
+## Quick Start
+
+```bash
+# Zero-install (recommended)
+npx @agile-team/robot-cli create my-project
+# or
+bunx @agile-team/robot-cli create my-project
+
+# Global install
+npm i -g @agile-team/robot-cli
+robot create
+```
+
+---
+
+## Template Configuration
+
+When selecting **Robot Admin Full**, the CLI offers three configuration modes:
+
+```
+◆  Select template configuration:
+│  ○ Full — Keep all demo pages and features
+│  ● Lite — Remove demos, keep core business framework  ⭐ Recommended
+│  ○ Custom — Choose modules to keep
+```
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Full** | All 74 pages, all features and deps | Learning, demos |
+| **Lite** ⭐ | Remove 56 demo pages + dashboard + i18n + 3D login + more, keep core + sys-manage | Real projects |
+| **Custom** | Pick individual page modules, features, optional packages | Custom needs |
+
+> Trimming runs automatically after download. Other templates are not affected.
+
+---
+
+## Available Templates
+
+| Template | Architecture | Stack | Branch |
+|----------|-------------|-------|--------|
+| **Robot Admin** Full | Monolith | Vue 3 + Naive UI + Pinia + Auth + Charts + 50+ demos | `main` |
+| **Robot Monorepo** | Monorepo | bun workspace + multi-package | `monorepo` |
+| **Robot MicroApp** | Micro-frontend | MicroApp + sub-apps + shared routing | `micro-app` |
+| **Robot Module Federation** | Module Federation | Vite Module Federation + remote modules | `module-federation` |
+| **Robot uni-app** Full | Cross-platform | uni-app + uView UI + multi-target | `main` |
+
+---
+
+## Commands
+
+### `robot create [name]`
+
+```bash
+robot create                              # Interactive
+robot create my-app -t robot-admin        # Specify template
+robot create my-app --from https://github.com/org/repo  # Custom repo
+robot create my-app --dry-run             # Preview only
+robot create my-app --skip-install        # Skip deps install
+robot create my-app --no-cache            # Force re-download
+```
+
+### `robot list` / `robot search <keyword>` / `robot doctor`
+
+```bash
+robot list              # List all templates
+robot list -r           # Recommended only
+robot search vue        # Search by keyword
+robot doctor            # Environment diagnostic
+robot doctor --clear-cache  # Clear template cache
+```
+
+---
+
+## Download Strategy
+
+```
+1. git clone --depth=1 (Gitee)     ← Fastest in China
+2. git clone --depth=1 (GitHub)    ← Inherits system proxy
+3. HTTP ZIP (codeload CDN)         ← Fallback when git unavailable
+```
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/ChenyCHENYU/robot-cli.git
+cd robot-cli
+bun install
+bun run dev        # Watch build
+bun run build      # Production build
+bun run test       # 52 unit tests
+bun run typecheck  # TypeScript check
+bun run lint       # oxlint
+```
+
+**Tech Stack**: TypeScript 5.7+ · tsup 8 · Vitest 3 · @clack/prompts · Commander · Node ≥ 20
+
+---
+
+## Links
+
+- [npm](https://www.npmjs.com/package/@agile-team/robot-cli)
+- [GitHub](https://github.com/ChenyCHENYU/robot-cli)
+- [Template Repo](https://github.com/ChenyCHENYU/Robot_Admin)
+- [Roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 
