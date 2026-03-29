@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.3] - 2026-03-30
+
+### Changed
+
+- **自定义配置改为交互式切换列表** — 基于 `select` 实现可视化框选：一次看到全部模块及 ✔保留/✘移除 状态，回车切换某项，最后选「确认」完成。按分类分组，兼容所有终端
+
 ## [3.1.2] - 2026-03-30
 
 ### Fixed

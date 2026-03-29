@@ -166,35 +166,63 @@ export async function selectTrimMode(): Promise<TrimSelection> {
     return { mode: "lite", groupsToTrim: LITE_GROUPS };
   }
 
-  // Custom mode — confirm each toggle individually (compatible with all terminals)
+  // Custom mode — interactive toggle list built on p.select (works on all terminals)
   const categoryLabels: Record<string, string> = {
     pages: "页面模块",
     features: "功能模块",
     packages: "@robot-admin 可选包",
   };
 
-  const keptIds: string[] = [];
-  let currentCategory = "";
+  const kept = new Set(
+    TRIM_TOGGLES.filter((t) => t.defaultKeep).map((t) => t.id),
+  );
 
-  for (const toggle of TRIM_TOGGLES) {
-    const cat = categoryLabels[toggle.category];
-    if (cat !== currentCategory) {
-      currentCategory = cat;
-      p.log.info(chalk.dim(`── ${cat} ──`));
+  const CONFIRM_VALUE = "__confirm__";
+
+  // Loop: show all toggles + confirm, selecting an item toggles it
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const options: { value: string; label: string; hint?: string }[] = [];
+
+    let lastCat = "";
+    for (const t of TRIM_TOGGLES) {
+      const cat = categoryLabels[t.category];
+      const prefix = kept.has(t.id)
+        ? chalk.green("✔ 保留")
+        : chalk.red("✘ 移除");
+      const label =
+        (cat !== lastCat ? chalk.dim(`[${cat}] `) : chalk.dim("         ")) +
+        `${prefix} ${t.label}`;
+      lastCat = cat;
+      options.push({ value: t.id, label, hint: t.hint });
     }
 
-    const keep = await p.confirm({
-      message: `保留 ${toggle.label}？${toggle.hint ? chalk.dim(` (${toggle.hint})`) : ""}`,
-      initialValue: toggle.defaultKeep,
+    // Separator + confirm action
+    options.push({
+      value: CONFIRM_VALUE,
+      label: chalk.bold.cyan("───── ✔ 确认以上选择 ─────"),
     });
 
-    if (p.isCancel(keep)) process.exit(0);
-    if (keep) keptIds.push(toggle.id);
+    const picked = await p.select({
+      message: "上下键移动，回车切换选中状态（最后选「确认」完成）:",
+      options,
+    });
+
+    if (p.isCancel(picked)) process.exit(0);
+
+    if (picked === CONFIRM_VALUE) break;
+
+    // Toggle the item
+    if (kept.has(picked as string)) {
+      kept.delete(picked as string);
+    } else {
+      kept.add(picked as string);
+    }
   }
 
-  const groupsToTrim = TRIM_TOGGLES.filter(
-    (t) => !keptIds.includes(t.id),
-  ).map((t) => t.id);
+  const groupsToTrim = TRIM_TOGGLES.filter((t) => !kept.has(t.id)).map(
+    (t) => t.id,
+  );
 
   return { mode: "custom", groupsToTrim };
 }
