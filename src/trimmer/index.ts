@@ -166,22 +166,27 @@ export async function selectTrimMode(): Promise<TrimSelection> {
     return { mode: "lite", groupsToTrim: LITE_GROUPS };
   }
 
-  // Custom mode — multiselect
+  // Custom mode — groupMultiselect (grouped by category)
   const categoryLabels: Record<string, string> = {
     pages: "页面模块",
     features: "功能模块",
     packages: "@robot-admin 可选包",
   };
 
-  const selectOptions = TRIM_TOGGLES.map((t) => ({
-    value: t.id,
-    label: `${categoryLabels[t.category]} > ${t.label}`,
-    hint: t.hint,
-  }));
+  const groupedOptions: Record<string, { value: string; label: string; hint?: string }[]> = {};
+  for (const t of TRIM_TOGGLES) {
+    const groupLabel = categoryLabels[t.category];
+    if (!groupedOptions[groupLabel]) groupedOptions[groupLabel] = [];
+    groupedOptions[groupLabel].push({
+      value: t.id,
+      label: t.label,
+      hint: t.hint,
+    });
+  }
 
-  const kept = await p.multiselect({
+  const kept = await p.groupMultiselect({
     message: "选择要保留的模块（空格切换，回车确认）:",
-    options: selectOptions,
+    options: groupedOptions,
     initialValues: TRIM_TOGGLES.filter((t) => t.defaultKeep).map((t) => t.id),
     required: false,
   });

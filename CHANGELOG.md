@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.1] - 2026-03-30
+
+### Fixed
+
+- **自定义配置选择交互修复** — 将 Custom 模式的 `multiselect` 替换为 `groupMultiselect`，按页面模块/功能模块/可选包分组显示，修复部分终端下无法交互选择的问题
+
 ## [3.1.0] - 2026-03-30
 
 ### Added
