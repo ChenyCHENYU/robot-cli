@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.2] - 2026-03-30
+
+### Fixed
+
+- **自定义配置选择彻底修复** — 将 Custom 模式从 `groupMultiselect` 改为逐项 `confirm`（Y/N 确认），彻底解决 Windows 终端下 multiselect 无法交互的兼容性问题，按分类显示类目标题
+
 ## [3.1.1] - 2026-03-30
 
 ### Fixed

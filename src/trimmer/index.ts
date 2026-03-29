@@ -166,37 +166,35 @@ export async function selectTrimMode(): Promise<TrimSelection> {
     return { mode: "lite", groupsToTrim: LITE_GROUPS };
   }
 
-  // Custom mode — groupMultiselect (grouped by category)
+  // Custom mode — confirm each toggle individually (compatible with all terminals)
   const categoryLabels: Record<string, string> = {
     pages: "页面模块",
     features: "功能模块",
     packages: "@robot-admin 可选包",
   };
 
-  const groupedOptions: Record<string, { value: string; label: string; hint?: string }[]> = {};
-  for (const t of TRIM_TOGGLES) {
-    const groupLabel = categoryLabels[t.category];
-    if (!groupedOptions[groupLabel]) groupedOptions[groupLabel] = [];
-    groupedOptions[groupLabel].push({
-      value: t.id,
-      label: t.label,
-      hint: t.hint,
+  const keptIds: string[] = [];
+  let currentCategory = "";
+
+  for (const toggle of TRIM_TOGGLES) {
+    const cat = categoryLabels[toggle.category];
+    if (cat !== currentCategory) {
+      currentCategory = cat;
+      p.log.info(chalk.dim(`── ${cat} ──`));
+    }
+
+    const keep = await p.confirm({
+      message: `保留 ${toggle.label}？${toggle.hint ? chalk.dim(` (${toggle.hint})`) : ""}`,
+      initialValue: toggle.defaultKeep,
     });
+
+    if (p.isCancel(keep)) process.exit(0);
+    if (keep) keptIds.push(toggle.id);
   }
 
-  const kept = await p.groupMultiselect({
-    message: "选择要保留的模块（空格切换，回车确认）:",
-    options: groupedOptions,
-    initialValues: TRIM_TOGGLES.filter((t) => t.defaultKeep).map((t) => t.id),
-    required: false,
-  });
-
-  if (p.isCancel(kept)) process.exit(0);
-
-  const keptSet = new Set(kept);
-  const groupsToTrim = TRIM_TOGGLES.filter((t) => !keptSet.has(t.id)).map(
-    (t) => t.id,
-  );
+  const groupsToTrim = TRIM_TOGGLES.filter(
+    (t) => !keptIds.includes(t.id),
+  ).map((t) => t.id);
 
   return { mode: "custom", groupsToTrim };
 }
