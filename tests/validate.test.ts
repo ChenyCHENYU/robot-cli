@@ -42,6 +42,12 @@ describe("validateProjectName", () => {
     expect(validateProjectName("my!app").valid).toBe(false);
   });
 
+  it("should reject Windows reserved names and trailing dots", () => {
+    expect(validateProjectName("con").valid).toBe(false);
+    expect(validateProjectName("com1.txt").valid).toBe(false);
+    expect(validateProjectName("my-app.").valid).toBe(false);
+  });
+
   it("should accept scoped package names", () => {
     // Current implementation doesn't support scoped names (@ and / are rejected)
     expect(validateProjectName("@scope/my-app").valid).toBe(false);

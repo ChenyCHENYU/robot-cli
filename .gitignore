@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 bun.lockb
+# Bun is the canonical package manager; avoid drifting secondary lockfiles.
+package-lock.json
+npm-shrinkwrap.json
 
 # Logs
 logs

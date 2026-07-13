@@ -4,15 +4,12 @@ import { dirname, join } from "node:path";
 import chalk from "chalk";
 import * as p from "@clack/prompts";
 import { Command } from "commander";
-import { createProject } from "./create";
-import { runDoctor } from "./doctor";
 import {
   getAllTemplates,
   getRecommendedTemplates,
   searchTemplates,
   getCategoryForTemplate,
 } from "./templates";
-import { checkForUpdates } from "./utils";
 import { VERSION_LABELS } from "./config";
 import type { CreateOptions } from "./types";
 
@@ -49,7 +46,9 @@ function showWelcome(): void {
 
 async function showMainMenu(): Promise<void> {
   const allTemplates = getAllTemplates();
-  const count = Object.keys(allTemplates).length;
+  const count = Object.values(allTemplates).filter(
+    (template) => template.status !== "coming-soon",
+  ).length;
 
   p.intro(chalk.bgCyan.black(` ${count} 个模板可用  ·  Node ${process.version}  ·  v${VERSION} `));
 
@@ -71,6 +70,7 @@ async function showMainMenu(): Promise<void> {
 
   switch (action) {
     case "create":
+      const { createProject } = await import("./create");
       await createProject(undefined, {});
       break;
     case "list":
@@ -80,6 +80,7 @@ async function showMainMenu(): Promise<void> {
       await searchInteractive();
       break;
     case "doctor":
+      const { runDoctor } = await import("./doctor");
       await runDoctor();
       break;
     case "exit":
@@ -94,10 +95,17 @@ function showTemplateList(recommended: boolean): void {
   const templates = recommended ? getRecommendedTemplates() : getAllTemplates();
   const title = recommended ? "推荐模板" : "所有模板";
   const entries = Object.entries(templates);
+  const availableCount = entries.filter(
+    ([, template]) => template.status !== "coming-soon",
+  ).length;
 
   console.log();
   console.log(chalk.blue.bold(title));
-  console.log(chalk.dim(`共 ${entries.length} 个模板`));
+  console.log(
+    chalk.dim(
+      `共 ${availableCount} 个可用模板${entries.length > availableCount ? `，${entries.length - availableCount} 个开发中` : ""}`,
+    ),
+  );
   console.log();
 
   for (const [key, t] of entries) {
@@ -107,9 +115,13 @@ function showTemplateList(recommended: boolean): void {
     const cat = getCategoryForTemplate(key);
     const catLabel = cat ? chalk.dim(`[${cat.name}]`) : "";
 
-    console.log(`  ${chalk.bold(t.name)} ${ver} ${catLabel}`);
+    const status =
+      t.status === "coming-soon" ? chalk.yellow("[开发中]") : "";
+    console.log(`  ${chalk.bold(t.name)} ${ver} ${catLabel} ${status}`);
     console.log(`  ${chalk.dim(t.description)}`);
-    console.log(`  ${chalk.dim(`命令: robot create my-app -t ${key}`)}`);
+    if (t.status !== "coming-soon") {
+      console.log(`  ${chalk.dim(`命令: robot create my-app -t ${key}`)}`);
+    }
     console.log(`  ${chalk.dim(`features: ${t.features.join(", ")}`)}`);
     console.log();
   }
@@ -148,9 +160,13 @@ function showSearchResults(keyword: string): void {
     const ver = VERSION_LABELS[t.version]
       ? (t.version === "full" ? chalk.green : t.version === "micro" ? chalk.blue : chalk.yellow)(`[${VERSION_LABELS[t.version]}]`)
       : chalk.dim(`[${t.version}]`);
-    console.log(`  ${chalk.bold(t.name)} ${ver}`);
+    const status =
+      t.status === "coming-soon" ? chalk.yellow("[开发中]") : "";
+    console.log(`  ${chalk.bold(t.name)} ${ver} ${status}`);
     console.log(`  ${chalk.dim(t.description)}`);
-    console.log(`  ${chalk.dim(`robot create my-app -t ${key}`)}`);
+    if (t.status !== "coming-soon") {
+      console.log(`  ${chalk.dim(`robot create my-app -t ${key}`)}`);
+    }
     console.log();
   }
 }
@@ -158,6 +174,7 @@ function showSearchResults(keyword: string): void {
 // ── Update Check ─────────────────────────────────────────────────
 
 async function notifyUpdate(): Promise<void> {
+  const { checkForUpdates } = await import("./utils");
   const newVersion = await checkForUpdates(
     "@agile-team/robot-cli",
     VERSION,
@@ -198,6 +215,7 @@ export async function main(): Promise<void> {
     .option("--no-cache", "不使用缓存")
     .action(async (projectName: string | undefined, opts: CreateOptions) => {
       showWelcome();
+      const { createProject } = await import("./create");
       await createProject(projectName, opts);
       await notifyUpdate();
     });
@@ -222,6 +240,7 @@ export async function main(): Promise<void> {
     .description("诊断开发环境")
     .option("--clear-cache", "清理模板缓存")
     .action(async (opts: { clearCache?: boolean }) => {
+      const { runDoctor } = await import("./doctor");
       await runDoctor(opts);
     });
 

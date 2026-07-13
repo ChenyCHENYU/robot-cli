@@ -66,6 +66,12 @@ export interface DownloadOptions {
   giteeUrl?: string;
 }
 
+export interface DownloadedTemplate {
+  path: string;
+  /** Only paths owned by the current process may be cleaned up. Cache paths omit this. */
+  cleanupPath?: string;
+}
+
 // ── Cache ────────────────────────────────────────────────────────
 export interface CacheEntry {
   repoUrl: string;

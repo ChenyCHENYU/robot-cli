@@ -1,15 +1,22 @@
 import fs from "fs-extra";
 import path from "node:path";
 import os from "node:os";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import chalk from "chalk";
 import extract from "extract-zip";
-import type { TemplateConfig, DownloadOptions, CacheIndex } from "./types";
+import type {
+  TemplateConfig,
+  DownloadOptions,
+  DownloadedTemplate,
+  CacheIndex,
+} from "./types";
 import { CACHE_DIR_NAME } from "./config";
 
 // ── Cache constants ──────────────────────────────────────────────
 const CACHE_DIR = path.join(os.homedir(), ".robot-cli", CACHE_DIR_NAME);
 const CACHE_INDEX_PATH = path.join(CACHE_DIR, "index.json");
+const CACHE_INDEX_VERSION = 2;
 
 // ── URL Builders ─────────────────────────────────────────────────
 
@@ -22,7 +29,9 @@ function parseGitHubRepo(repoUrl: string): { owner: string; repo: string } | nul
     const url = new URL(repoUrl);
     if (url.hostname !== "github.com") return null;
     const parts = url.pathname.replace(/^\/|\/$/g, "").split("/");
-    if (parts.length >= 2) return { owner: parts[0], repo: parts[1] };
+    if (parts.length >= 2) {
+      return { owner: parts[0], repo: parts[1].replace(/\.git$/, "") };
+    }
     return null;
   } catch {
     return null;
@@ -57,32 +66,35 @@ export function buildDownloadUrl(repoUrl: string, branch = "main"): string {
 
 // ── Cache helpers ────────────────────────────────────────────────
 
-export function getCacheKey(repoUrl: string): string {
-  let hash = 0;
-  for (let i = 0; i < repoUrl.length; i++) {
-    hash = ((hash << 5) - hash + repoUrl.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+export function getCacheKey(repoUrl: string, branch = "main"): string {
+  const identity = `${repoUrl.replace(/\/+$/, "")}#${branch}`;
+  return createHash("sha256").update(identity).digest("hex").slice(0, 16);
 }
 
 async function loadCacheIndex(): Promise<CacheIndex> {
   try {
     if (await fs.pathExists(CACHE_INDEX_PATH)) {
-      return await fs.readJson(CACHE_INDEX_PATH);
+      const index = (await fs.readJson(CACHE_INDEX_PATH)) as CacheIndex;
+      if (index.version === CACHE_INDEX_VERSION && index.entries) return index;
     }
   } catch {
     // corrupted index, reset
   }
-  return { version: 1, entries: {} };
+  return { version: CACHE_INDEX_VERSION, entries: {} };
 }
 
 async function saveCacheIndex(index: CacheIndex): Promise<void> {
   await fs.ensureDir(CACHE_DIR);
-  await fs.writeJson(CACHE_INDEX_PATH, index, { spaces: 2 });
+  const stagingPath = `${CACHE_INDEX_PATH}.tmp-${process.pid}-${randomUUID()}`;
+  await fs.writeJson(stagingPath, index, { spaces: 2 });
+  await fs.move(stagingPath, CACHE_INDEX_PATH, { overwrite: true });
 }
 
-async function getCachedTemplate(repoUrl: string): Promise<string | null> {
-  const key = getCacheKey(repoUrl);
+async function getCachedTemplate(
+  repoUrl: string,
+  branch: string,
+): Promise<string | null> {
+  const key = getCacheKey(repoUrl, branch);
   const cachePath = path.join(CACHE_DIR, key);
   if (await fs.pathExists(cachePath)) {
     const pkgPath = path.join(cachePath, "package.json");
@@ -91,25 +103,48 @@ async function getCachedTemplate(repoUrl: string): Promise<string | null> {
   return null;
 }
 
-async function saveToCache(repoUrl: string, sourcePath: string, branch = "main"): Promise<void> {
-  try {
-    const key = getCacheKey(repoUrl);
-    const cachePath = path.join(CACHE_DIR, key);
-    await fs.ensureDir(CACHE_DIR);
-    await fs.remove(cachePath).catch(() => {});
-    await fs.copy(sourcePath, cachePath);
+async function getDirectorySize(dirPath: string): Promise<number> {
+  let size = 0;
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) size += await getDirectorySize(fullPath);
+    else if (entry.isFile()) size += (await fs.stat(fullPath)).size;
+  }
+  return size;
+}
 
+async function saveToCache(
+  repoUrl: string,
+  sourcePath: string,
+  branch = "main",
+): Promise<void> {
+  let stagingPath: string | undefined;
+  try {
+    const key = getCacheKey(repoUrl, branch);
+    const cachePath = path.join(CACHE_DIR, key);
     const index = await loadCacheIndex();
-    const stat = await fs.stat(sourcePath);
+    await fs.ensureDir(CACHE_DIR);
+    stagingPath = path.join(
+      CACHE_DIR,
+      `${key}.tmp-${process.pid}-${randomUUID()}`,
+    );
+    await fs.copy(sourcePath, stagingPath);
+    const size = await getDirectorySize(stagingPath);
+    await fs.move(stagingPath, cachePath, { overwrite: true });
+    stagingPath = undefined;
+
     index.entries[key] = {
       repoUrl,
       downloadedAt: new Date().toISOString(),
       branch,
-      size: stat.size,
+      size,
     };
     await saveCacheIndex(index);
   } catch {
     // Cache write failure is non-critical
+  } finally {
+    if (stagingPath) await fs.remove(stagingPath).catch(() => {});
   }
 }
 
@@ -328,10 +363,14 @@ async function tryDownload(
 function assertZipBuffer(buffer: Buffer, sourceName: string): void {
   if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
     // 取前 100 字节做预览，过滤不可打印字符
-    const preview = buffer
-      .slice(0, 100)
-      .toString("utf8")
-      .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\xff]/g, "·")
+    const printablePreview = Array.from(
+      buffer.slice(0, 100).toString("utf8"),
+      (char) => {
+        const code = char.charCodeAt(0);
+        return code < 32 || (code >= 127 && code <= 255) ? "·" : char;
+      },
+    ).join("");
+    const preview = printablePreview
       .replace(/\s+/g, " ")
       .slice(0, 80);
     throw new Error(
@@ -406,7 +445,7 @@ async function gitCloneTemplate(
 export async function downloadTemplate(
   template: Pick<TemplateConfig, "repoUrl" | "branch" | "giteeUrl">,
   options: DownloadOptions = {},
-): Promise<string> {
+): Promise<DownloadedTemplate> {
   const { spinner, noCache, giteeUrl: optGiteeUrl } = options;
   const branch = template.branch || "main";
   const giteeUrl = optGiteeUrl || template.giteeUrl;
@@ -417,10 +456,10 @@ export async function downloadTemplate(
 
   // ── 缓存检查 ───────────────────────────────────────────────────
   if (!noCache) {
-    const cached = await getCachedTemplate(template.repoUrl);
+    const cached = await getCachedTemplate(template.repoUrl, branch);
     if (cached) {
       if (spinner) spinner.text = "已使用缓存模板，如需更新请运行 robot cache clear";
-      return cached;
+      return { path: cached };
     }
   }
 
@@ -436,7 +475,7 @@ export async function downloadTemplate(
   const cloneErrors: string[] = [];
 
   for (const { url: cloneUrl, name: srcName } of cloneSources) {
-    const tempDir = path.join(os.tmpdir(), `robot-git-${Date.now()}`);
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "robot-git-"));
     try {
       if (spinner) spinner.text = `连接 ${srcName}...`;
 
@@ -450,9 +489,9 @@ export async function downloadTemplate(
         throw new Error("模板缺少 package.json");
       }
 
-      if (!noCache) saveToCache(template.repoUrl, tempDir, branch).catch(() => {});
+      if (!noCache) await saveToCache(template.repoUrl, tempDir, branch);
       if (spinner) spinner.text = `模板下载完成 (${srcName})`;
-      return tempDir;
+      return { path: tempDir, cleanupPath: tempDir };
     } catch (err) {
       await fs.remove(tempDir).catch(() => {});
       const msg = (err as Error).message;
@@ -469,6 +508,7 @@ export async function downloadTemplate(
   // ── Strategy 2: HTTP ZIP download (git 不可用时的兜底) ─────────
   if (noGit && spinner) spinner.text = "系统未安装 git，切换到 HTTP 下载...";
 
+  let httpTempRoot: string | undefined;
   try {
     if (spinner) spinner.text = "HTTP 下载模板中...";
 
@@ -481,9 +521,9 @@ export async function downloadTemplate(
 
     if (spinner) spinner.text = "保存文件...";
 
-    const timestamp = Date.now();
-    const tempZip = path.join(os.tmpdir(), `robot-template-${timestamp}.zip`);
-    const tempExtract = path.join(os.tmpdir(), `robot-extract-${timestamp}`);
+    httpTempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "robot-http-"));
+    const tempZip = path.join(httpTempRoot, "template.zip");
+    const tempExtract = path.join(httpTempRoot, "extract");
 
     const contentLength = response.headers.get("content-length");
     const totalSize = contentLength ? parseInt(contentLength, 10) : 0;
@@ -537,31 +577,25 @@ export async function downloadTemplate(
       throw new Error("模板缺少 package.json 文件");
     }
 
-    if (!noCache) saveToCache(template.repoUrl, sourcePath, branch).catch(() => {});
+    if (!noCache) await saveToCache(template.repoUrl, sourcePath, branch);
     if (spinner) spinner.text = `模板下载完成 (HTTP/${sourceName})`;
 
     await fs.remove(tempZip).catch(() => {});
-    return sourcePath;
+    return { path: sourcePath, cleanupPath: httpTempRoot };
   } catch (httpError) {
+    if (httpTempRoot) {
+      await fs.remove(httpTempRoot).catch(() => {});
+      httpTempRoot = undefined;
+    }
     // ── 最终兜底：使用缓存 ───────────────────────────────────────
     if (!noCache) {
-      const cached = await getCachedTemplate(template.repoUrl);
+      const cached = await getCachedTemplate(template.repoUrl, branch);
       if (cached) {
         if (spinner) spinner.text = "网络不可用，使用缓存模板...";
         console.log(`\n  ${chalk.yellow("注意: 已使用缓存版本（非最新）")}`);
-        return cached;
+        return { path: cached };
       }
     }
-
-    // 清理临时文件
-    try {
-      const tmpFiles = await fs.readdir(os.tmpdir());
-      for (const f of tmpFiles.filter(
-        (x) => x.includes("robot-template-") || x.includes("robot-extract-") || x.includes("robot-git-"),
-      )) {
-        await fs.remove(path.join(os.tmpdir(), f)).catch(() => {});
-      }
-    } catch { /* ignore */ }
 
     const errMsg = (httpError as Error).message;
     const allErrors = [...cloneErrors, `HTTP: ${errMsg}`].map((e) => `  - ${e}`).join("\n");

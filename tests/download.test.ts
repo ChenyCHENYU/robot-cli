@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildDownloadUrl, getCacheKey } from "../src/download";
+import fs from "fs-extra";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import {
+  buildDownloadUrl,
+  downloadTemplate,
+  getCacheKey,
+} from "../src/download";
 
 describe("buildDownloadUrl", () => {
   it("should build GitHub download URL (codeload CDN)", () => {
@@ -71,5 +79,65 @@ describe("getCacheKey", () => {
     const key1 = getCacheKey("https://github.com/user/repo1");
     const key2 = getCacheKey("https://github.com/user/repo2");
     expect(key1).not.toBe(key2);
+  });
+
+  it("should isolate branches of the same repository", () => {
+    const main = getCacheKey("https://github.com/user/repo", "main");
+    const monorepo = getCacheKey(
+      "https://github.com/user/repo",
+      "monorepo",
+    );
+    expect(main).not.toBe(monorepo);
+  });
+
+  it("should normalize a trailing slash", () => {
+    const withoutSlash = getCacheKey("https://github.com/user/repo", "main");
+    const withSlash = getCacheKey("https://github.com/user/repo/", "main");
+    expect(withoutSlash).toBe(withSlash);
+  });
+});
+
+describe("downloadTemplate", () => {
+  it("marks a fresh clone as process-owned temporary data", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "robot-download-test-"));
+    const repository = path.join(root, "repository");
+    await fs.ensureDir(repository);
+    await fs.writeJson(path.join(repository, "package.json"), {
+      name: "fixture-template",
+      version: "1.0.0",
+    });
+
+    execFileSync("git", ["init", "--initial-branch=main"], {
+      cwd: repository,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["add", "."], { cwd: repository, stdio: "ignore" });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Robot CLI Test",
+        "-c",
+        "user.email=robot-cli@example.invalid",
+        "commit",
+        "-m",
+        "fixture",
+      ],
+      { cwd: repository, stdio: "ignore" },
+    );
+
+    try {
+      const downloaded = await downloadTemplate(
+        { repoUrl: repository, branch: "main" },
+        { noCache: true },
+      );
+      expect(downloaded.cleanupPath).toBe(downloaded.path);
+      expect(await fs.pathExists(path.join(downloaded.path, "package.json"))).toBe(
+        true,
+      );
+      await fs.remove(downloaded.cleanupPath!);
+    } finally {
+      await fs.remove(root);
+    }
   });
 });

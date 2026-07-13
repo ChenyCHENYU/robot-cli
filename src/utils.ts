@@ -52,6 +52,7 @@ export function validateProjectName(name: string): {
   if (t.length > 214) errors.push("项目名称不能超过214个字符");
   if (t.toLowerCase() !== t) errors.push("项目名称只能包含小写字母");
   if (/^[._]/.test(t)) errors.push('项目名称不能以 "." 或 "_" 开头');
+  if (t.endsWith(".")) errors.push('项目名称不能以 "." 结尾');
   if (!/^[a-z0-9._-]+$/.test(t))
     errors.push("项目名称只能包含字母、数字、点、下划线和短横线");
 
@@ -68,6 +69,10 @@ export function validateProjectName(name: string): {
     "robot",
   ];
   if (reserved.includes(t)) errors.push(`"${t}" 是保留名称，请使用其他名称`);
+
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(t)) {
+    errors.push(`"${t}" 是 Windows 保留名称，请使用其他名称`);
+  }
 
   return { valid: errors.length === 0, errors };
 }
@@ -190,12 +195,12 @@ export async function installDependencies(
   projectPath: string,
   spinner: import("ora").Ora | undefined,
   packageManager: PackageManager = "npm",
-): Promise<void> {
+): Promise<boolean> {
   try {
     const pkgJson = path.join(projectPath, "package.json");
     if (!fs.existsSync(pkgJson)) {
       if (spinner) spinner.text = "跳过依赖安装 (无 package.json)";
-      return;
+      return false;
     }
 
     const cmds: Record<PackageManager, string> = {
@@ -214,6 +219,7 @@ export async function installDependencies(
     });
 
     if (spinner) spinner.text = `依赖安装完成 (${packageManager})`;
+    return true;
   } catch (error) {
     if (spinner) spinner.text = "依赖安装失败，请手动安装";
     console.log();
@@ -224,6 +230,7 @@ export async function installDependencies(
     console.log(chalk.cyan(`   cd ${path.basename(projectPath)}`));
     console.log(chalk.cyan(`   ${packageManager} install`));
     console.log();
+    return false;
   }
 }
 

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.4] - 2026-07-13
+
+### Fixed
+
+- 修复同一仓库不同分支共用缓存 key、缓存写入竞态和缓存目录被误删的问题
+- 覆盖已有项目时先备份，创建失败自动恢复原目录
+- `--skip-install` 现在真正跳过安装询问，安装或 Git 初始化结果会准确展示
+- 拒绝 Windows 保留项目名及尾随点，输入名称在使用前统一去除首尾空白
+- 即将上线的模板不再展示可执行创建命令，也无法通过 `--template` 绕过限制
+
+### Changed
+
+- 发布流程改为 tag 驱动、可安全重跑，并校验 tag 与 `package.json` 版本一致
+- GitHub Actions 升级到 Node 24 runtime，CI 增加 Node.js 24 兼容性验证
+- Bun 作为唯一权威锁文件，发布前统一执行 lint、类型检查、测试和构建
+- npm 发布开启 provenance，GitHub Release 改用 GitHub CLI 幂等创建
+- 增加 Dependabot，每周检查 Bun 依赖和 GitHub Actions 更新
+- create、doctor 和更新检查改为按需加载并启用 ESM code splitting，CLI 启动基准缩短约 28%
+
 ## [3.1.3] - 2026-03-30
 
 ### Changed

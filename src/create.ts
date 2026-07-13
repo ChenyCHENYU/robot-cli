@@ -1,9 +1,10 @@
 import fs from "fs-extra";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import chalk from "chalk";
 import * as p from "@clack/prompts";
 import ora from "ora";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { downloadTemplate } from "./download";
 import {
   TEMPLATE_CATEGORIES,
@@ -163,9 +164,9 @@ async function handleProjectName(
         },
       });
       if (p.isCancel(newName)) process.exit(0);
-      return newName;
+      return newName.trim();
     }
-    return projectName;
+    return projectName.trim();
   }
 
   const defaultName = generateDefaultProjectName(template);
@@ -182,7 +183,7 @@ async function handleProjectName(
   });
 
   if (p.isCancel(name)) process.exit(0);
-  return name;
+  return name.trim();
 }
 
 function generateDefaultProjectName(template: SelectedTemplate): string {
@@ -199,10 +200,11 @@ async function selectTemplate(
 ): Promise<SelectedTemplate> {
   if (templateOption) {
     const all = getAllTemplates();
-    if (all[templateOption]) {
+    if (all[templateOption]?.status !== "coming-soon") {
       return { key: templateOption, ...all[templateOption] };
     }
-    console.log(chalk.yellow(`模板 "${templateOption}" 不存在`));
+    const reason = all[templateOption] ? "尚未上线" : "不存在";
+    console.log(chalk.yellow(`模板 "${templateOption}" ${reason}`));
     console.log();
   }
   return await selectTemplateMethod();
@@ -535,11 +537,17 @@ async function configureProject(
   });
   if (p.isCancel(initGit)) process.exit(0);
 
-  const installDeps = await p.confirm({
-    message: "是否立即安装依赖?",
-    initialValue: !options.skipInstall,
-  });
-  if (p.isCancel(installDeps)) process.exit(0);
+  let installDeps = false;
+  if (options.skipInstall) {
+    p.log.info("已通过 --skip-install 跳过依赖安装");
+  } else {
+    const shouldInstall = await p.confirm({
+      message: "是否立即安装依赖?",
+      initialValue: true,
+    });
+    if (p.isCancel(shouldInstall)) process.exit(0);
+    installDeps = shouldInstall;
+  }
 
   let packageManager = hasBun ? "bun" : hasPnpm ? "pnpm" : "npm";
 
@@ -664,12 +672,17 @@ async function executeCreation(
     spinner: "dots",
     color: "cyan",
   }).start();
-  let tempPath: string | undefined;
+  const projectPath = path.resolve(projectName);
+  let templatePath: string | undefined;
+  let cleanupPath: string | undefined;
+  let backupPath: string | undefined;
+  let overwriteExisting = false;
+  let dependenciesInstalled: boolean | null = config.installDeps ? false : null;
+  let gitInitialized = false;
 
   try {
     // 1. Check directory
     spinner.text = "检查项目目录...";
-    const projectPath = path.resolve(projectName);
 
     if (fs.existsSync(projectPath)) {
       spinner.stop();
@@ -682,34 +695,40 @@ async function executeCreation(
 
       if (p.isCancel(overwrite) || !overwrite) {
         p.outro(chalk.yellow("取消创建"));
-        process.exit(0);
+        return;
       }
-
-      spinner.start("清理现有目录...");
-      await fs.remove(projectPath);
-      spinner.text = "准备创建新目录...";
+      overwriteExisting = true;
+      spinner.start("保留现有目录，先下载并验证模板...");
     }
 
     // 2. Download template
     spinner.text = "下载最新模板...";
     try {
-      tempPath = await downloadTemplate(template, {
+      const downloaded = await downloadTemplate(template, {
         spinner,
         noCache: options.noCache,
       });
-      if (!tempPath || !fs.existsSync(tempPath))
-        throw new Error(`模板路径无效: ${tempPath}`);
+      templatePath = downloaded.path;
+      cleanupPath = downloaded.cleanupPath;
+      if (!templatePath || !fs.existsSync(templatePath))
+        throw new Error(`模板路径无效: ${templatePath}`);
     } catch (error) {
-      // 只在这里处理下载错误，不再向上抛出到外层 catch
       spinner.fail("模板下载失败");
-      console.log();
-      console.log(chalk.dim(`  ${(error as Error).message}`));
-      console.log();
-      return;
+      throw error;
+    }
+
+    if (overwriteExisting) {
+      backupPath = path.join(
+        path.dirname(projectPath),
+        `.${path.basename(projectPath)}.robot-backup-${randomUUID()}`,
+      );
+      spinner.text = "备份现有项目目录...";
+      await fs.move(projectPath, backupPath);
     }
 
     // 3. Copy template
-    await copyTemplate(tempPath, projectPath, spinner);
+    if (!templatePath) throw new Error("模板路径未初始化");
+    await copyTemplate(templatePath, projectPath, spinner);
 
     // 3.5. Execute trimming (if applicable)
     if (trimSelection && trimSelection.mode !== "full") {
@@ -724,19 +743,28 @@ async function executeCreation(
     // 5. Git init
     if (config.initGit) {
       spinner.text = "初始化 Git 仓库...";
-      initializeGitRepository(projectPath);
+      gitInitialized = initializeGitRepository(projectPath);
     }
 
     // 6. Install dependencies
     if (config.installDeps) {
       spinner.text = `使用 ${config.packageManager} 安装依赖...`;
-      await installDependencies(projectPath, spinner, config.packageManager);
+      dependenciesInstalled = await installDependencies(
+        projectPath,
+        spinner,
+        config.packageManager,
+      );
     }
 
     // 7. Clean up temp
-    if (tempPath) {
+    if (cleanupPath) {
       spinner.text = "清理临时文件...";
-      await fs.remove(tempPath).catch(() => {});
+      await fs.remove(cleanupPath).catch(() => {});
+      cleanupPath = undefined;
+    }
+    if (backupPath) {
+      await fs.remove(backupPath);
+      backupPath = undefined;
     }
 
     // 8. Done!
@@ -745,15 +773,15 @@ async function executeCreation(
     const pm = config.packageManager || "bun";
     const cmd = getStartCommand(template, pm);
     const steps = [`cd ${projectName}`];
-    if (!config.installDeps) steps.push(`${pm} install`);
+    if (dependenciesInstalled !== true) steps.push(`${pm} install`);
     if (cmd) steps.push(cmd);
 
     p.note(
       [
         `${chalk.dim("位置:")}   ${chalk.cyan(projectPath)}`,
         `${chalk.dim("模板:")}   ${chalk.cyan(template.name)}`,
-        `${chalk.dim("Git:")}    ${config.initGit ? chalk.green("已初始化") : "未初始化"}`,
-        `${chalk.dim("依赖:")}   ${config.installDeps ? chalk.green("已完成") : "需手动安装"}`,
+        `${chalk.dim("Git:")}    ${gitInitialized ? chalk.green("已初始化并提交") : config.initGit ? chalk.yellow("初始化未完成") : "未初始化"}`,
+        `${chalk.dim("依赖:")}   ${dependenciesInstalled === true ? chalk.green("已完成") : dependenciesInstalled === false ? chalk.yellow("自动安装失败") : "已跳过"}`,
         "",
         chalk.bold("快速开始:"),
         ...steps.map((s) => `  ${chalk.cyan(s)}`),
@@ -772,7 +800,19 @@ async function executeCreation(
 
     p.outro(chalk.green("Happy coding!"));
   } catch (error) {
-    if (tempPath) await fs.remove(tempPath).catch(() => {});
+    if (cleanupPath) await fs.remove(cleanupPath).catch(() => {});
+    if (backupPath && (await fs.pathExists(backupPath))) {
+      try {
+        await fs.remove(projectPath).catch(() => {});
+        await fs.move(backupPath, projectPath);
+        backupPath = undefined;
+        p.log.warn("创建失败，原项目目录已恢复");
+      } catch (restoreError) {
+        throw new Error(
+          `${(error as Error).message}\n原目录恢复失败，备份保留在: ${backupPath}\n${(restoreError as Error).message}`,
+        );
+      }
+    }
     if (spinner.isSpinning) spinner.fail("创建项目失败");
     throw error;
   }
@@ -818,17 +858,19 @@ async function processProjectConfig(
   }
 }
 
-function initializeGitRepository(projectPath: string): void {
+function initializeGitRepository(projectPath: string): boolean {
   try {
-    execSync("git --version", { stdio: "ignore" });
-    execSync("git init", { cwd: projectPath, stdio: "ignore" });
-    execSync("git add .", { cwd: projectPath, stdio: "ignore" });
-    execSync('git commit -m "feat: 初始化项目"', {
+    execFileSync("git", ["--version"], { stdio: "ignore" });
+    execFileSync("git", ["init"], { cwd: projectPath, stdio: "ignore" });
+    execFileSync("git", ["add", "."], { cwd: projectPath, stdio: "ignore" });
+    execFileSync("git", ["commit", "-m", "feat: 初始化项目"], {
       cwd: projectPath,
       stdio: "ignore",
     });
+    return true;
   } catch {
-    console.log(chalk.yellow("Git 不可用，跳过仓库初始化"));
+    console.log(chalk.yellow("Git 初始化或首次提交失败，请稍后手动检查"));
+    return false;
   }
 }
 

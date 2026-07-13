@@ -98,7 +98,11 @@ export function getRecommendedTemplates(): Record<string, TemplateConfig> {
   // Pad to at least 4 if not enough
   if (Object.keys(recommended).length < 4) {
     for (const key of Object.keys(all)) {
-      if (!recommended[key] && Object.keys(recommended).length < 6) {
+      if (
+        all[key].status !== "coming-soon" &&
+        !recommended[key] &&
+        Object.keys(recommended).length < 6
+      ) {
         recommended[key] = all[key];
       }
     }

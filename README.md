@@ -154,7 +154,7 @@ robot-cli/
 │   └── config/
 │       ├── templates.config.ts     # 模板注册表（所有模板定义在这里）
 │       └── cli.config.ts           # CLI 配置（推荐列表、启动命令等）
-├── tests/                          # Vitest 单元测试（52 个）
+├── tests/                          # Vitest 单元测试
 ├── tsup.config.ts                  # 构建配置（ESM, node20）
 └── .github/workflows/              # CI: PR 检查 + tag 发布
 ```
@@ -199,6 +199,19 @@ bun run test       # Vitest 测试
 bun run typecheck  # TypeScript 类型检查
 bun run lint       # oxlint 代码检查
 ```
+
+### 发布
+
+```bash
+bun run check             # 完整质量检查
+bun run release:dry-run   # 检查 npm 包内容
+bun run release:patch     # 生成版本提交和 tag（也可用 minor / major）
+git push origin main --follow-tags
+```
+
+npm 发布和 GitHub Release 统一由 tag 触发的 GitHub Actions 完成。请勿在本地先执行
+`npm publish`，避免同一版本被重复发布。工作流支持安全重跑：npm 版本已存在时会跳过发布，
+继续补建 GitHub Release。
 
 ### 技术栈
 
@@ -366,10 +379,23 @@ cd robot-cli
 bun install
 bun run dev        # Watch build
 bun run build      # Production build
-bun run test       # 52 unit tests
+bun run test       # Vitest unit tests
 bun run typecheck  # TypeScript check
 bun run lint       # oxlint
 ```
+
+### Release
+
+```bash
+bun run check
+bun run release:dry-run
+bun run release:patch     # or release:minor / release:major
+git push origin main --follow-tags
+```
+
+The pushed tag is the single release trigger. GitHub Actions publishes to npm and
+creates the GitHub Release; do not run `npm publish` locally first. The workflow is
+idempotent and skips an npm version that already exists.
 
 **Tech Stack**: TypeScript 5.7+ · tsup 8 · Vitest 3 · @clack/prompts · Commander · Node ≥ 20
 
