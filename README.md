@@ -156,7 +156,7 @@ robot-cli/
 │       └── cli.config.ts           # CLI 配置（推荐列表、启动命令等）
 ├── tests/                          # Vitest 单元测试
 ├── tsup.config.ts                  # 构建配置（ESM, node20）
-└── .github/workflows/              # CI 检查 + tag 创建 GitHub Release
+└── .github/workflows/              # 提交与 PR 的 CI 检查
 ```
 
 ---
@@ -208,12 +208,12 @@ bun run release:dry-run   # 检查 npm 包内容
 bun run release:patch     # 生成版本提交和 tag（也可用 minor / major）
 bun run release:publish   # 本地登录 npm 后发布；自动检查并构建 dist
 git push origin main
-git push origin vX.Y.Z    # 单独推送本次 tag，创建 GitHub Release
+git push origin vX.Y.Z    # 单独推送本次 tag
 ```
 
 npm 包由维护者在本地通过 Bun 发布；`prepublishOnly` 会执行完整质量检查，`prepack`
-会自动构建发布所需的 `dist`。GitHub Actions 不接触 npm 凭据，tag 只负责创建
-GitHub Release。请单独推送本次 tag，不要使用 `--follow-tags` 批量推送历史标签。
+会自动构建发布所需的 `dist`。GitHub Actions 只运行 CI，不接触 npm 凭据，也不参与
+发版。请单独推送本次 tag，不要使用 `--follow-tags` 批量推送历史标签。
 
 ### 技术栈
 
@@ -394,13 +394,13 @@ bun run release:dry-run
 bun run release:patch     # or release:minor / release:major
 bun run release:publish   # checks and builds dist automatically
 git push origin main
-git push origin vX.Y.Z    # push only this tag to create the GitHub Release
+git push origin vX.Y.Z    # push only this tag
 ```
 
 The maintainer publishes the npm package locally with Bun. `prepublishOnly` runs the
-quality checks and `prepack` builds `dist` automatically. GitHub Actions never receives
-npm credentials; pushing the release tag only creates the GitHub Release. Push the new
-tag explicitly instead of using `--follow-tags` with historical tags.
+quality checks and `prepack` builds `dist` automatically. GitHub Actions only runs CI;
+it never receives npm credentials and does not participate in releases. Push the new tag
+explicitly instead of using `--follow-tags` with historical tags.
 
 **Tech Stack**: TypeScript 5.7+ · tsup 8 · Vitest 3 · @clack/prompts · Commander · Node ≥ 20
 
