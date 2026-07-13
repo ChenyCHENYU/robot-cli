@@ -17,10 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- 发布流程改为 tag 驱动、可安全重跑，并校验 tag 与 `package.json` 版本一致
+- npm 包改由维护者使用 Bun 在本地发布；tag 工作流只创建 GitHub Release，并校验 tag 与 `package.json` 版本一致
 - GitHub Actions 升级到 Node 24 runtime，CI 增加 Node.js 24 兼容性验证
-- Bun 作为唯一权威锁文件，发布前统一执行 lint、类型检查、测试和构建
-- npm 发布开启 provenance，GitHub Release 改用 GitHub CLI 幂等创建
+- Bun 作为唯一权威锁文件；`prepublishOnly` 自动执行质量检查，`prepack` 自动构建发布所需的 `dist`
+- GitHub Actions 不再持有 npm Token，GitHub Release 改用 GitHub CLI 幂等创建
 - 增加 Dependabot，每周检查 Bun 依赖和 GitHub Actions 更新
 - create、doctor 和更新检查改为按需加载并启用 ESM code splitting，CLI 启动基准缩短约 28%
 

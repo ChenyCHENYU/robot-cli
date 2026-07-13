@@ -19,6 +19,7 @@
     "prepack": "bun run build",
     "prepublishOnly": "bun run check",
     "release:dry-run": "bun pm pack --dry-run",
+    "release:publish": "bun publish --access public",
     "release:patch": "bun pm version patch",
     "release:minor": "bun pm version minor",
     "release:major": "bun pm version major"
