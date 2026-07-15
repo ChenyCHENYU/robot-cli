@@ -110,27 +110,47 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
   mobile: {
     name: "移动端项目",
     stacks: {
-      uniapp: {
-        name: "uni-app",
+      h5: {
+        name: "Vue H5",
         patterns: {
-          multiplatform: {
-            name: "多端应用",
+          webview: {
+            name: "企业 H5 / WebView",
             templates: {
-              "robot-uniapp": {
-                name: "Robot uni-app 完整版",
-                description: "多端适配 + 插件市场 + 完整示例",
-                repoUrl: "https://github.com/ChenyCHENYU/Robot_Uniapp",
-                giteeUrl: "https://gitee.com/ycyplus163/Robot_uniApp",
-                features: ["多端发布", "uView UI", "插件集成"],
+              "robot-h5": {
+                name: "Robot H5 企业移动端",
+                description:
+                  "Vue 3 + Vite 7 + Vant 4，面向企业 H5 与 App WebView",
+                repoUrl: "https://github.com/ChenyCHENYU/Robot_H5",
+                features: [
+                  "Vant 4",
+                  "暗黑模式",
+                  "权限路由",
+                  "Mock",
+                  "WebView Bridge",
+                ],
                 version: "full",
-              },
-              "robot-uniapp-base": {
-                name: "Robot uni-app 精简版",
-                description: "基础框架 + 核心功能",
-                repoUrl: "https://github.com/ChenyCHENYU/Robot_Uniapp_Base",
-                features: ["基础框架", "路由配置"],
-                version: "base",
-                status: "coming-soon",
+                status: "beta",
+                runtime: {
+                  node: "^22.12.0 || ^24.0.0",
+                  packageManager: "pnpm",
+                  packageManagerVersion: "^11.8.0",
+                },
+                initializer: {
+                  manifestPath: "template.manifest.json",
+                  manifestId: "mobile.robot-h5",
+                  command: "node",
+                  args: [
+                    "scripts/setup-project.mjs",
+                    "--yes",
+                    "--project-name",
+                    "{projectName}",
+                    "--title",
+                    "{projectTitle}",
+                    "--created-by",
+                    "robot-cli",
+                  ],
+                },
+                startScript: "dev",
               },
             },
           },

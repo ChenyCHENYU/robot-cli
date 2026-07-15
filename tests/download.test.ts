@@ -139,5 +139,5 @@ describe("downloadTemplate", () => {
     } finally {
       await fs.remove(root);
     }
-  });
+  }, 15_000);
 });

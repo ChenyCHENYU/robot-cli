@@ -21,6 +21,7 @@ import {
   generateProjectStats,
   printProjectStats,
   detectPackageManager,
+  getPackageManagerVersion,
   getGitUser,
 } from "./utils";
 import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
@@ -31,10 +32,20 @@ import {
   getTrimSummary,
   type TrimSelection,
 } from "./trimmer";
+import {
+  assertTemplateRuntime,
+  getRequiredPackageManager,
+  isVersionSupported,
+  runTemplateInitializer,
+} from "./template-runtime";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
 const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
+
+function betaSuffix(status?: string): string {
+  return status === "beta" ? " [Beta]" : "";
+}
 
 /** 过滤掉尚未发布（status: "coming-soon"）的模板 */
 function filterAvailable<T extends { status?: string }>(
@@ -72,6 +83,11 @@ export async function createProject(
     template = await selectTemplate(options.template);
   }
 
+  if (template.status === "beta") {
+    p.log.warn(`${template.name} 当前为 Beta 模板，请先在测试项目中验证后再用于生产。`);
+  }
+  assertTemplateRuntime(template);
+
   // 2. Handle project name
   const finalProjectName = await handleProjectName(projectName, template);
 
@@ -82,7 +98,7 @@ export async function createProject(
   }
 
   // 4. Project configuration
-  const projectConfig = await configureProject(options);
+  const projectConfig = await configureProject(options, template);
 
   // 5. Confirm creation
   await confirmCreation(
@@ -105,26 +121,28 @@ export async function createProject(
       console.log(`  模板配置: ${chalk.cyan(getTrimSummary(trimSelection))}`);
     }
     console.log("  执行步骤:");
-    console.log(chalk.dim(`    1. 从 ${template.repoUrl} 下载最新模板`));
-    console.log(chalk.dim(`    2. 解压并复制到 ./${finalProjectName}`));
+    let step = 1;
+    console.log(chalk.dim(`    ${step++}. 从 ${template.repoUrl} 下载最新模板`));
+    console.log(chalk.dim(`    ${step++}. 解压并复制到 ./${finalProjectName}`));
     if (trimSelection && trimSelection.mode !== "full") {
       console.log(
-        chalk.dim(`    3. 执行模板裁剪 (${getTrimSummary(trimSelection)})`),
+        chalk.dim(`    ${step++}. 执行模板裁剪 (${getTrimSummary(trimSelection)})`),
       );
     }
     console.log(
       chalk.dim(
-        `    ${trimSelection && trimSelection.mode !== "full" ? 4 : 3}. 更新 package.json (name, description, author)`,
+        `    ${step++}. 更新 package.json (name, description, author)`,
       ),
     );
-    let step = trimSelection && trimSelection.mode !== "full" ? 5 : 4;
+    if (template.initializer) {
+      console.log(chalk.dim(`    ${step++}. 校验模板契约并执行模板初始化`));
+    }
     if (projectConfig.initGit) {
-      console.log(chalk.dim(`    ${step}. 初始化 Git 仓库并提交初始代码`));
-      step++;
+      console.log(chalk.dim(`    ${step++}. 初始化 Git 仓库并提交初始代码`));
     }
     if (projectConfig.installDeps) {
       console.log(
-        chalk.dim(`    ${step}. 使用 ${projectConfig.packageManager} 安装依赖`),
+        chalk.dim(`    ${step++}. 使用 ${projectConfig.packageManager} 安装依赖`),
       );
     }
     console.log();
@@ -267,7 +285,7 @@ async function selectFromRecommended(): Promise<SelectedTemplate> {
     const tags = template.features.slice(0, 3).join(", ");
     options.push({
       value: key,
-      label: `${template.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+      label: `${template.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(template.status)}`,
       hint: `${template.description} | ${tags}`,
     });
   }
@@ -374,7 +392,7 @@ async function selectByCategory(): Promise<SelectedTemplate> {
       const ver = VERSION_LABELS[t.version] || t.version;
       return {
         value: key,
-        label: `${t.name} [${ver}]`,
+        label: `${t.name} [${ver}]${betaSuffix(t.status)}`,
         hint: t.description,
       };
     });
@@ -446,7 +464,7 @@ async function selectBySearch(): Promise<SelectedTemplate> {
       const info = t.features.slice(0, 3).join(", ");
       options.push({
         value: key,
-        label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+        label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(t.status)}`,
         hint: `${t.description} | ${info}`,
       });
     }
@@ -498,7 +516,7 @@ async function selectFromAll(): Promise<SelectedTemplate> {
           const ver = VERSION_LABELS[t.version] || t.version;
           options.push({
             value: key,
-            label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]`,
+            label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(t.status)}`,
             hint: `${category.name} > ${stack.name} | ${t.description}`,
           });
         }
@@ -524,12 +542,21 @@ async function selectFromAll(): Promise<SelectedTemplate> {
 
 async function configureProject(
   options: CreateOptions,
+  template: SelectedTemplate,
 ): Promise<ProjectConfig> {
   p.log.step(chalk.bold("项目配置"));
 
   const available = detectPackageManager();
   const hasBun = available.includes("bun");
   const hasPnpm = available.includes("pnpm");
+  const requiredManager = getRequiredPackageManager(template);
+
+  if (requiredManager) {
+    const version = template.runtime?.packageManagerVersion;
+    p.log.info(
+      `${template.name} 要求使用 ${requiredManager}${version ? ` ${version}` : ""}`,
+    );
+  }
 
   const initGit = await p.confirm({
     message: "是否初始化 Git 仓库?",
@@ -549,44 +576,77 @@ async function configureProject(
     installDeps = shouldInstall;
   }
 
-  let packageManager = hasBun ? "bun" : hasPnpm ? "pnpm" : "npm";
+  let packageManager: ProjectConfig["packageManager"] =
+    requiredManager || (hasBun ? "bun" : hasPnpm ? "pnpm" : "npm");
 
   if (installDeps) {
-    const managerOptions: { value: string; label: string; hint?: string }[] =
-      [];
-    if (available.includes("bun"))
-      managerOptions.push({
-        value: "bun",
-        label: "bun",
-        hint: "推荐 - 极速安装",
-      });
-    if (available.includes("pnpm"))
-      managerOptions.push({
-        value: "pnpm",
-        label: "pnpm",
-        hint: "推荐 - 节省磁盘空间",
-      });
-    if (available.includes("yarn"))
-      managerOptions.push({ value: "yarn", label: "yarn", hint: "兼容性好" });
-    if (available.includes("npm"))
-      managerOptions.push({ value: "npm", label: "npm", hint: "Node.js 内置" });
+    if (requiredManager) {
+      const installedVersion = available.includes(requiredManager)
+        ? getPackageManagerVersion(requiredManager)
+        : null;
+      const requiredVersion = template.runtime?.packageManagerVersion;
 
-    if (managerOptions.length === 0) {
-      managerOptions.push(
-        { value: "npm", label: "npm" },
-        { value: "bun", label: "bun" },
-        { value: "pnpm", label: "pnpm" },
-        { value: "yarn", label: "yarn" },
-      );
+      if (!installedVersion) {
+        p.log.warn(
+          `未检测到模板要求的 ${requiredManager}，已跳过自动安装。项目创建后请先安装它。`,
+        );
+        installDeps = false;
+      } else if (
+        requiredVersion &&
+        !isVersionSupported(installedVersion, requiredVersion)
+      ) {
+        p.log.warn(
+          `${requiredManager} ${installedVersion} 不满足 ${requiredVersion}，已跳过自动安装。`,
+        );
+        installDeps = false;
+      } else {
+        p.log.success(`将使用 ${requiredManager} ${installedVersion} 安装依赖`);
+      }
+    } else {
+      const managerOptions: { value: string; label: string; hint?: string }[] =
+        [];
+      if (available.includes("bun"))
+        managerOptions.push({
+          value: "bun",
+          label: "bun",
+          hint: "推荐 - 极速安装",
+        });
+      if (available.includes("pnpm"))
+        managerOptions.push({
+          value: "pnpm",
+          label: "pnpm",
+          hint: "推荐 - 节省磁盘空间",
+        });
+      if (available.includes("yarn"))
+        managerOptions.push({
+          value: "yarn",
+          label: "yarn",
+          hint: "兼容性好",
+        });
+      if (available.includes("npm"))
+        managerOptions.push({
+          value: "npm",
+          label: "npm",
+          hint: "Node.js 内置",
+        });
+
+      if (managerOptions.length === 0) {
+        managerOptions.push(
+          { value: "npm", label: "npm" },
+          { value: "bun", label: "bun" },
+          { value: "pnpm", label: "pnpm" },
+          { value: "yarn", label: "yarn" },
+        );
+      }
+
+      const pm = await p.select({
+        message: "选择包管理器:",
+        options: managerOptions,
+        initialValue: hasBun ? "bun" : hasPnpm ? "pnpm" : "npm",
+      });
+      if (p.isCancel(pm)) process.exit(0);
+      packageManager = pm as ProjectConfig["packageManager"];
     }
-
-    const pm = await p.select({
-      message: "选择包管理器:",
-      options: managerOptions,
-      initialValue: hasBun ? "bun" : hasPnpm ? "pnpm" : "npm",
-    });
-    if (p.isCancel(pm)) process.exit(0);
-    packageManager = pm;
   }
 
   const description = await p.text({
@@ -606,7 +666,7 @@ async function configureProject(
   return {
     initGit,
     installDeps,
-    packageManager: packageManager as ProjectConfig["packageManager"],
+    packageManager,
     description,
     author,
   };
@@ -626,6 +686,15 @@ async function confirmCreation(
     `${chalk.dim("模板描述:")} ${template.description}`,
     `${chalk.dim("包含功能:")} ${template.features.join(", ") || "自定义模板"}`,
   ];
+
+  if (template.status === "beta") {
+    lines.push(`${chalk.dim("成熟状态:")} ${chalk.magenta("Beta")}`);
+  }
+  if (template.runtime?.node || template.runtime?.packageManager) {
+    lines.push(
+      `${chalk.dim("运行要求:")} Node ${template.runtime.node || "默认"} / ${template.runtime.packageManager || config.packageManager}`,
+    );
+  }
 
   if (trimSelection) {
     lines.push(
@@ -739,6 +808,17 @@ async function executeCreation(
     // 4. Process config
     spinner.text = "处理项目配置...";
     await processProjectConfig(projectPath, projectName, template, config);
+
+    // 4.5. Validate and run a template-owned initializer when declared.
+    if (template.initializer) {
+      await runTemplateInitializer(
+        projectPath,
+        projectName,
+        template,
+        config,
+        spinner,
+      );
+    }
 
     // 5. Git init
     if (config.initGit) {
@@ -875,6 +955,6 @@ function initializeGitRepository(projectPath: string): boolean {
 }
 
 function getStartCommand(template: SelectedTemplate, pm: string): string {
-  const script = START_COMMAND_MAP[template.key] || "dev";
+  const script = template.startScript || START_COMMAND_MAP[template.key] || "dev";
   return `${pm} run ${script}`;
 }

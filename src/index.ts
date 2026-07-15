@@ -30,6 +30,12 @@ function getPackageVersion(): string {
 
 const VERSION = getPackageVersion();
 
+function templateStatusBadge(status?: string): string {
+  if (status === "beta") return chalk.magenta("[Beta]");
+  if (status === "coming-soon") return chalk.yellow("[开发中]");
+  return "";
+}
+
 // ── Welcome Banner ───────────────────────────────────────────────
 
 function showWelcome(): void {
@@ -98,12 +104,14 @@ function showTemplateList(recommended: boolean): void {
   const availableCount = entries.filter(
     ([, template]) => template.status !== "coming-soon",
   ).length;
+  const betaCount = entries.filter(([, template]) => template.status === "beta").length;
+  const comingSoonCount = entries.length - availableCount;
 
   console.log();
   console.log(chalk.blue.bold(title));
   console.log(
     chalk.dim(
-      `共 ${availableCount} 个可用模板${entries.length > availableCount ? `，${entries.length - availableCount} 个开发中` : ""}`,
+      `共 ${availableCount} 个可用模板${betaCount ? `（${betaCount} 个 Beta）` : ""}${comingSoonCount ? `，${comingSoonCount} 个开发中` : ""}`,
     ),
   );
   console.log();
@@ -115,8 +123,7 @@ function showTemplateList(recommended: boolean): void {
     const cat = getCategoryForTemplate(key);
     const catLabel = cat ? chalk.dim(`[${cat.name}]`) : "";
 
-    const status =
-      t.status === "coming-soon" ? chalk.yellow("[开发中]") : "";
+    const status = templateStatusBadge(t.status);
     console.log(`  ${chalk.bold(t.name)} ${ver} ${catLabel} ${status}`);
     console.log(`  ${chalk.dim(t.description)}`);
     if (t.status !== "coming-soon") {
@@ -160,8 +167,7 @@ function showSearchResults(keyword: string): void {
     const ver = VERSION_LABELS[t.version]
       ? (t.version === "full" ? chalk.green : t.version === "micro" ? chalk.blue : chalk.yellow)(`[${VERSION_LABELS[t.version]}]`)
       : chalk.dim(`[${t.version}]`);
-    const status =
-      t.status === "coming-soon" ? chalk.yellow("[开发中]") : "";
+    const status = templateStatusBadge(t.status);
     console.log(`  ${chalk.bold(t.name)} ${ver} ${status}`);
     console.log(`  ${chalk.dim(t.description)}`);
     if (t.status !== "coming-soon") {

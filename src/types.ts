@@ -3,6 +3,28 @@ import type { Ora } from "ora";
 // ── Package Manager ──────────────────────────────────────────────
 export type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 
+export type TemplateStatus = "beta" | "coming-soon";
+
+export interface TemplateRuntimeConfig {
+  /** Node.js semver range required by the template. */
+  node?: string;
+  /** Package manager mandated by the template. */
+  packageManager?: PackageManager;
+  /** Package-manager semver range, used to decide whether auto-install is safe. */
+  packageManagerVersion?: string;
+}
+
+export interface TemplateInitializerConfig {
+  /** Manifest shipped by the template and validated before initialization. */
+  manifestPath: string;
+  /** Expected manifest id, preventing a repository/config mismatch. */
+  manifestId: string;
+  /** Only Node.js scripts are allowed, and they are invoked without a shell. */
+  command: "node";
+  /** Supports {projectName} and {projectTitle} placeholders. */
+  args: string[];
+}
+
 // ── Template Config (4-layer nested structure) ───────────────────
 export interface TemplateConfig {
   name: string;
@@ -12,7 +34,26 @@ export interface TemplateConfig {
   branch?: string;
   features: string[];
   version: "full" | "base" | "micro";
-  status?: "coming-soon";
+  status?: TemplateStatus;
+  runtime?: TemplateRuntimeConfig;
+  initializer?: TemplateInitializerConfig;
+  startScript?: string;
+}
+
+export interface TemplateManifest {
+  schemaVersion: number;
+  id: string;
+  name: string;
+  version: string;
+  category: string;
+  runtime?: {
+    node?: string;
+    packageManager?: string;
+  };
+  entry?: {
+    interactive?: string;
+    nonInteractive?: string;
+  };
 }
 
 export interface PatternConfig {

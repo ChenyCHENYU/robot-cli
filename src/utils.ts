@@ -234,6 +234,19 @@ export async function installDependencies(
   }
 }
 
+export function getPackageManagerVersion(
+  packageManager: PackageManager,
+): string | null {
+  try {
+    return execSync(`${packageManager} --version`, {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 // ── Project Stats ────────────────────────────────────────────────
 
 export async function generateProjectStats(

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Robot H5 企业移动端模板以 Beta 状态接入，覆盖企业 H5、微信/钉钉浏览器与 App WebView 场景
+- 增加模板 manifest 身份校验、Node.js/包管理器版本约束、无 shell 初始化器和每周真实构建冒烟
+
+### Changed
+
+- 移除 Robot uni-app 模板，仅保留质量可控的 Robot H5 移动端路线
+- 模板可声明自己的启动脚本和强制包管理器；Robot H5 固定使用 pnpm 11.8
+
 ## [3.1.4] - 2026-07-13
 
 ### Fixed

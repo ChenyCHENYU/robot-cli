@@ -14,6 +14,8 @@ describe("getAllTemplates", () => {
   it("should contain known template keys", () => {
     const all = getAllTemplates();
     expect(all).toHaveProperty("robot-admin");
+    expect(all).toHaveProperty("robot-h5");
+    expect(all).not.toHaveProperty("robot-uniapp");
     expect(all).toHaveProperty("robot-react");
     expect(all).toHaveProperty("robot-nest");
   });
@@ -48,6 +50,11 @@ describe("searchTemplates", () => {
     expect(Object.keys(results).length).toBe(0);
   });
 
+  it("should find Robot H5 by its mobile WebView capabilities", () => {
+    const results = searchTemplates("WebView");
+    expect(results).toHaveProperty("robot-h5");
+  });
+
   it("should be case insensitive", () => {
     const lower = searchTemplates("vue");
     const upper = searchTemplates("VUE");
@@ -71,5 +78,9 @@ describe("getRecommendedTemplates", () => {
     for (const key of Object.keys(rec)) {
       expect(all).toHaveProperty(key);
     }
+  });
+
+  it("should not recommend beta templates", () => {
+    expect(getRecommendedTemplates()).not.toHaveProperty("robot-h5");
   });
 });

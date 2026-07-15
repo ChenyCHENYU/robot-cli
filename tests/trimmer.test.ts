@@ -276,7 +276,7 @@ describe("isTrimmableTemplate", () => {
   });
 
   it("should return false for other templates", () => {
-    expect(isTrimmableTemplate(makeTemplate({ key: "robot-uniapp" }))).toBe(
+    expect(isTrimmableTemplate(makeTemplate({ key: "robot-h5" }))).toBe(
       false,
     );
     expect(

@@ -21,7 +21,6 @@ export const RECOMMENDED_TEMPLATE_KEYS = [
   "robot-monorepo",
   "robot-micro-app",
   "robot-module-federation",
-  "robot-uniapp",
 ];
 
 /** 模板 key → 启动脚本名 映射 */
@@ -33,8 +32,6 @@ export const START_COMMAND_MAP: Record<string, string> = {
   "robot-module-federation": "dev",
   "robot-react": "start",
   "robot-react-base": "start",
-  "robot-uniapp": "dev:h5",
-  "robot-uniapp-base": "dev:h5",
   "robot-nest": "start:dev",
   "robot-nest-base": "start:dev",
   "robot-nest-micro": "start:dev",

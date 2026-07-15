@@ -1,0 +1,41 @@
+name: Template Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  robot-h5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11.8.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Smoke Robot H5 contract
+        run: bun run smoke:robot-h5

@@ -16,7 +16,7 @@
 
 ## 为什么用 Robot CLI
 
-- **5 个生产就绪模板**：Vue 全栈 (Admin / Monorepo / 微前端 / 模块联邦) + uni-app 多端，更多模板持续上线
+- **4 个稳定模板 + Robot H5 Beta**：覆盖 Vue 中后台、Monorepo、微前端、模块联邦和企业移动 H5
 - **模板配置系统**：Robot Admin 支持 Full / Lite / Custom 三档配置，按需裁剪演示页面和可选功能
 - **秒级下载**：`git clone --depth=1` 引擎，和 create-vue / degit 同方案，自动走系统代理
 - **国内友好**：Gitee 优先 → GitHub 兜底 → HTTP ZIP 二次兜底，三层容错
@@ -72,9 +72,18 @@ robot create
 | **Robot Monorepo** | Monorepo | bun workspace + 多包管理 + 共享组件 | `monorepo` |
 | **Robot MicroApp** | 微前端 | MicroApp + 主子应用 + 路由共享 | `micro-app` |
 | **Robot Module Federation** | 模块联邦 | Vite Module Federation + 远程模块 | `module-federation` |
-| **Robot uni-app** 完整版 | 多端应用 | uni-app + uView UI + 多端发布 | `main` |
 
 > 前 4 个模板共用仓库 [ChenyCHENYU/Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)，不同架构通过分支区分。
+
+### Beta
+
+| 模板 | 场景 | 技术栈 | 运行要求 |
+|------|------|--------|----------|
+| **Robot H5** | 企业 H5 / 微信与钉钉浏览器 / App WebView | Vue 3 + Vite 7 + Vant 4 + Bridge | Node 22.12/24 + pnpm 11.8 |
+
+Robot H5 使用模板自带的 `template.manifest.json` 契约初始化。CLI 会校验模板身份、
+Node.js 和包管理器要求，再安全调用模板的非交互初始化器。当前为 Beta，请先在测试项目验证。
+robot-cli 每周还会真实执行冻结依赖安装与生产构建，及时发现上游模板漂移。
 
 ### 开发中
 
@@ -91,6 +100,7 @@ Robot Admin 精简版 · React 全家桶 · NestJS 后端 · Electron 桌面端 
 ```bash
 robot create                              # 交互式
 robot create my-app -t robot-admin        # 指定模板
+robot create mobile-app -t robot-h5       # Robot H5 Beta（要求 Node 24 + pnpm 11.8）
 robot create my-app --from https://github.com/org/repo  # 自定义仓库
 robot create my-app --dry-run             # 预览，不实际创建
 robot create my-app --skip-install        # 跳过依赖安装
@@ -246,7 +256,7 @@ npm i -g @agile-team/robot-cli
 | 大型项目、多包共享 | `robot-monorepo` |
 | 多团队协作、独立部署 | `robot-micro-app` |
 | 运行时模块共享 | `robot-module-federation` |
-| 小程序/H5/App 多端 | `robot-uniapp` |
+| 企业 H5、微信/钉钉浏览器、App WebView | `robot-h5`（Beta） |
 
 ---
 
@@ -255,6 +265,7 @@ npm i -g @agile-team/robot-cli
 - [npm](https://www.npmjs.com/package/@agile-team/robot-cli)
 - [GitHub](https://github.com/ChenyCHENYU/robot-cli)
 - [模板仓库 Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)
+- [模板仓库 Robot_H5](https://github.com/ChenyCHENYU/Robot_H5)
 - [路线图](ROADMAP.md)
 - [更新日志](CHANGELOG.md)
 
@@ -280,7 +291,7 @@ npm i -g @agile-team/robot-cli
 
 ## Why Robot CLI
 
-- **5 production-ready templates**: Vue full-stack (Admin / Monorepo / Micro-frontend / Module Federation) + uni-app cross-platform
+- **4 stable templates + Robot H5 Beta**: Vue admin, Monorepo, micro-frontends, Module Federation, and enterprise mobile H5
 - **Template configuration system**: Robot Admin supports Full / Lite / Custom modes — trim demo pages and optional features on demand
 - **Instant download**: `git clone --depth=1` engine, same approach as create-vue / degit, inherits system proxy
 - **China-friendly**: Gitee first → GitHub fallback → HTTP ZIP fallback, triple fault-tolerance
@@ -334,7 +345,16 @@ When selecting **Robot Admin Full**, the CLI offers three configuration modes:
 | **Robot Monorepo** | Monorepo | bun workspace + multi-package | `monorepo` |
 | **Robot MicroApp** | Micro-frontend | MicroApp + sub-apps + shared routing | `micro-app` |
 | **Robot Module Federation** | Module Federation | Vite Module Federation + remote modules | `module-federation` |
-| **Robot uni-app** Full | Cross-platform | uni-app + uView UI + multi-target | `main` |
+
+### Beta
+
+| Template | Use case | Stack | Runtime |
+|----------|----------|-------|---------|
+| **Robot H5** | Enterprise H5 / WeChat and DingTalk browsers / App WebView | Vue 3 + Vite 7 + Vant 4 + Bridge | Node 22.12/24 + pnpm 11.8 |
+
+Robot H5 is initialized through its `template.manifest.json` contract. The CLI validates
+template identity and runtime constraints before invoking its non-interactive initializer.
+Its weekly smoke test also performs a frozen dependency install and production build.
 
 ---
 
@@ -345,6 +365,7 @@ When selecting **Robot Admin Full**, the CLI offers three configuration modes:
 ```bash
 robot create                              # Interactive
 robot create my-app -t robot-admin        # Specify template
+robot create mobile-app -t robot-h5       # Robot H5 Beta (Node 24 + pnpm 11.8)
 robot create my-app --from https://github.com/org/repo  # Custom repo
 robot create my-app --dry-run             # Preview only
 robot create my-app --skip-install        # Skip deps install
