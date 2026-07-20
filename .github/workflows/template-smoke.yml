@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           package-manager-cache: false
@@ -30,7 +30,7 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
         with:
           version: 11.8.0
 
