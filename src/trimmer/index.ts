@@ -1,740 +1,789 @@
 import fs from "fs-extra";
 import path from "node:path";
-import chalk from "chalk";
 import * as p from "@clack/prompts";
+import { babelParse, parse } from "@vue/compiler-sfc";
 import type { Ora } from "ora";
 import type { SelectedTemplate } from "../types";
-
-// ── Types ────────────────────────────────────────────────────────
+import { CreationCancelled } from "../interaction";
 
 export type TrimMode = "full" | "lite" | "custom";
-
 export interface TrimSelection {
   mode: TrimMode;
   groupsToTrim: string[];
 }
 
-interface TrimToggle {
-  id: string;
-  label: string;
-  hint: string;
-  category: "pages" | "features" | "packages";
-  /** Default checked (= keep) in Custom mode */
-  defaultKeep: boolean;
-  /** Trimmed in Lite preset */
-  liteTrims: boolean;
-}
-
-// ── Toggle Definitions ───────────────────────────────────────────
-
-const TRIM_TOGGLES: TrimToggle[] = [
-  // ── Page modules
-  {
-    id: "demo",
-    label: "演示页面（56 个组件示例 + 预览系统）",
-    hint: "demo + plugins + editor + large-screen + hooks + directives",
-    category: "pages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-  {
-    id: "dashboard",
-    label: "仪表盘（ECharts 图表页面）",
-    hint: "dashboard/analysis + statistics",
-    category: "pages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
+const TOGGLES = [
+  { id: "demo", label: "组件演示与预览", hint: "示例页面及其菜单", lite: true },
+  { id: "dashboard", label: "分析仪表盘", hint: "分析与统计页面", lite: true },
   {
     id: "sys-manage",
-    label: "系统管理页面（用户/角色/权限/菜单/字典）",
-    hint: "5 个管理页面 + API",
-    category: "pages",
-    defaultKeep: true,
-    liteTrims: false,
+    label: "系统管理",
+    hint: "用户、角色、菜单和权限页面",
+    lite: false,
   },
   {
     id: "iframe-about",
-    label: "外部页面 + 关于",
-    hint: "iframe 内嵌 + about 页",
-    category: "pages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-  // ── Feature modules
-  {
-    id: "i18n",
-    label: "国际化（i18n 多语言支持）",
-    hint: "语言切换 + 路由翻译",
-    category: "features",
-    defaultKeep: true,
-    liteTrims: true,
+    label: "外部页面与关于",
+    hint: "内嵌页面、项目介绍",
+    lite: true,
   },
   {
     id: "spline-3d",
-    label: "登录页 3D 背景（Spline 动画）",
-    hint: "~200KB gzip",
-    category: "features",
-    defaultKeep: true,
-    liteTrims: true,
+    label: "登录页 3D 背景",
+    hint: "联网加载 Spline 场景",
+    lite: true,
   },
   {
     id: "analytics",
-    label: "Vercel Analytics（线上统计）",
-    hint: "仅线上演示站需要，推荐关闭",
-    category: "features",
-    defaultKeep: false,
-    liteTrims: true,
+    label: "Vercel 访问统计",
+    hint: "保留后仍需显式配置才启用",
+    lite: true,
   },
-  // ── @robot-admin optional packages
-  {
-    id: "directives",
-    label: "@robot-admin/directives（自定义指令集）",
-    hint: "v-copy/v-watermark/v-drag 等",
-    category: "packages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-  {
-    id: "file-utils",
-    label: "@robot-admin/file-utils（文件处理工具）",
-    hint: "文件上传/下载/预览",
-    category: "packages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-  {
-    id: "form-validate",
-    label: "@robot-admin/form-validate（表单验证）",
-    hint: "表单校验规则集",
-    category: "packages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-  {
-    id: "git-standards",
-    label: "@robot-admin/git-standards（Git 提交规范）",
-    hint: "commit-lint + husky",
-    category: "packages",
-    defaultKeep: true,
-    liteTrims: true,
-  },
-];
+] as const;
+const SHARED_RUNTIME = "保留认证、布局、国际化、共享工具及行业样例";
 
-const LITE_GROUPS = TRIM_TOGGLES.filter((t) => t.liteTrims).map((t) => t.id);
-
-// ── Public API ───────────────────────────────────────────────────
-
-/** Check if a template is robot-admin main branch (only template that supports trimming) */
 export function isTrimmableTemplate(template: SelectedTemplate): boolean {
   return template.key === "robot-admin" && !template.branch;
 }
 
-/** Show trim mode selection UI, returns TrimSelection */
-export async function selectTrimMode(): Promise<TrimSelection> {
-  p.log.step(chalk.bold("模板配置"));
+export function getTrimSelection(mode: TrimMode): TrimSelection {
+  if (mode === "custom") {
+    throw new Error(
+      "自定义配置需要逐项选择，请移除 --yes 或改用 lite/full 预设。",
+    );
+  }
+  return {
+    mode,
+    groupsToTrim:
+      mode === "lite" ? TOGGLES.filter((t) => t.lite).map((t) => t.id) : [],
+  };
+}
 
+export function getPresetSelection(mode: "full" | "lite"): TrimSelection {
+  return getTrimSelection(mode);
+}
+
+export async function selectTrimMode(): Promise<TrimSelection> {
   const mode = await p.select<TrimMode>({
-    message: "选择模板配置:",
+    message: "如何开始这个 PC 项目？",
     options: [
       {
-        value: "full",
-        label: "完整版（Full）",
-        hint: "包含所有演示页面和功能模块",
-      },
-      {
         value: "lite",
-        label: "精简版（Lite）",
-        hint: "移除演示页面，保留核心业务框架  ⭐ 推荐",
+        label: "精简示例",
+        hint: "移除组件演示与 3D；保留系统管理和行业样例",
       },
       {
-        value: "custom",
-        label: "自定义（Custom）",
-        hint: "自行选择要保留的模块",
+        value: "full",
+        label: "完整演示",
+        hint: "保留全部示例，适合体验与参考",
       },
+      { value: "custom", label: "自定义", hint: "选择要保留的页面与可选功能" },
     ],
-    initialValue: "lite" as TrimMode,
+    initialValue: "lite",
   });
+  if (p.isCancel(mode)) throw new CreationCancelled();
+  if (mode !== "custom") return getTrimSelection(mode);
 
-  if (p.isCancel(mode)) process.exit(0);
-
-  if (mode === "full") {
-    return { mode: "full", groupsToTrim: [] };
-  }
-
-  if (mode === "lite") {
-    return { mode: "lite", groupsToTrim: LITE_GROUPS };
-  }
-
-  // Custom mode — interactive toggle list built on p.select (works on all terminals)
-  const categoryLabels: Record<string, string> = {
-    pages: "页面模块",
-    features: "功能模块",
-    packages: "@robot-admin 可选包",
+  p.log.info(`${SHARED_RUNTIME}。空格切换，回车完成；可全部取消。`);
+  const kept = await p.multiselect({
+    message: "保留哪些内容？",
+    options: TOGGLES.map((t) => ({
+      value: t.id,
+      label: t.label,
+      hint: t.hint,
+    })),
+    initialValues: TOGGLES.filter((t) => !t.lite).map((t) => t.id),
+    required: false,
+  });
+  if (p.isCancel(kept)) throw new CreationCancelled();
+  return {
+    mode: "custom",
+    groupsToTrim: TOGGLES.filter((t) => !kept.includes(t.id)).map((t) => t.id),
   };
+}
 
-  const kept = new Set(
-    TRIM_TOGGLES.filter((t) => t.defaultKeep).map((t) => t.id),
+export function getTrimSummary(selection: TrimSelection): string {
+  if (selection.mode === "full") return "完整演示（保留全部内容）";
+  if (selection.mode === "lite")
+    return `精简示例（移除组件演示与 3D；${SHARED_RUNTIME}）`;
+  const removed = selection.groupsToTrim.map(
+    (id) => TOGGLES.find((t) => t.id === id)?.label ?? id,
   );
+  return removed.length
+    ? `自定义：移除${removed.join("、")}；${SHARED_RUNTIME}`
+    : "自定义（保留全部内容）";
+}
 
-  const CONFIRM_VALUE = "__confirm__";
+interface AstNode {
+  type: string;
+  start?: number | null;
+  end?: number | null;
+  [key: string]: unknown;
+}
+interface Edit {
+  start: number;
+  end: number;
+  text: string;
+}
+interface Source {
+  content: string;
+  ast: AstNode;
+  offset: number;
+  externalSource?: string;
+}
 
-  // Loop: show all toggles + confirm, selecting an item toggles it
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const options: { value: string; label: string; hint?: string }[] = [];
+/** Babel 与 Vue 的 AST 坐标用于整节点修改，不按关键字删行。 */
+function walk(
+  node: unknown,
+  visit: (node: AstNode, parent?: AstNode) => void,
+  parent?: AstNode,
+): void {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const child of node) walk(child, visit, parent);
+    return;
+  }
+  const value = node as AstNode;
+  if (typeof value.type === "string") visit(value, parent);
+  for (const [key, child] of Object.entries(value)) {
+    if (
+      [
+        "loc",
+        "tokens",
+        "comments",
+        "leadingComments",
+        "trailingComments",
+        "extra",
+      ].includes(key)
+    )
+      continue;
+    if (child && typeof child === "object") walk(child, visit, value);
+  }
+}
 
-    let lastCat = "";
-    for (const t of TRIM_TOGGLES) {
-      const cat = categoryLabels[t.category];
-      const prefix = kept.has(t.id)
-        ? chalk.green("✔ 保留")
-        : chalk.red("✘ 移除");
-      const label =
-        (cat !== lastCat ? chalk.dim(`[${cat}] `) : chalk.dim("         ")) +
-        `${prefix} ${t.label}`;
-      lastCat = cat;
-      options.push({ value: t.id, label, hint: t.hint });
+function applyEdits(content: string, edits: Edit[]): string {
+  const ordered = edits.sort((a, b) => a.start - b.start || b.end - a.end);
+  const unique: Edit[] = [];
+  for (const edit of ordered) {
+    const previous = unique[unique.length - 1];
+    if (previous && edit.start < previous.end) {
+      if (edit.end <= previous.end) continue;
+      throw new Error(
+        "模板结构已变化：修改范围重叠，已停止裁剪。请选择完整演示。",
+      );
     }
+    unique.push(edit);
+  }
+  for (const edit of unique.reverse())
+    content =
+      content.slice(0, edit.start) + edit.text + content.slice(edit.end);
+  return content;
+}
 
-    // Separator + confirm action
-    options.push({
-      value: CONFIRM_VALUE,
-      label: chalk.bold.cyan("───── ✔ 确认以上选择 ─────"),
+function scriptSources(content: string, file: string): Source[] {
+  let blocks = [
+    { content, offset: 0, externalSource: undefined as string | undefined },
+  ];
+  if (file.endsWith(".vue")) {
+    const result = parse(content, { filename: file });
+    if (result.errors.length)
+      throw new Error(`模板 ${file} 不是有效的 Vue 文件，已停止裁剪。`);
+    const scripts = [
+      result.descriptor.scriptSetup,
+      result.descriptor.script,
+    ].filter((block) => block !== null);
+    blocks = scripts.length
+      ? scripts.map((block) => ({
+          content: block.content,
+          offset: block.loc.start.offset,
+          externalSource: block.src,
+        }))
+      : [{ content: "", offset: 0, externalSource: undefined }];
+  }
+  try {
+    return blocks.map((block) => ({
+      content,
+      offset: block.offset,
+      externalSource: block.externalSource,
+      ast: babelParse(block.content, {
+        sourceType: "unambiguous",
+        plugins: [
+          "typescript",
+          ...(file.endsWith(".tsx") || file.endsWith(".jsx")
+            ? ["jsx" as const]
+            : []),
+        ],
+      }) as unknown as AstNode,
+    }));
+  } catch {
+    throw new Error(
+      `模板 ${file} 的脚本结构无法识别，已停止裁剪。请选择完整演示。`,
+    );
+  }
+}
+
+function scriptSource(content: string, file: string): Source {
+  return scriptSources(content, file)[0]!;
+}
+
+function nodeEdit(node: AstNode, offset: number, text = ""): Edit {
+  if (typeof node.start !== "number" || typeof node.end !== "number")
+    throw new Error("模板节点缺少位置信息");
+  return { start: node.start + offset, end: node.end + offset, text };
+}
+
+function identifier(node: unknown): string | undefined {
+  const value = node as AstNode | undefined;
+  return value?.type === "Identifier" ? (value.name as string) : undefined;
+}
+
+function stringValue(node: unknown): string | undefined {
+  const value = node as AstNode | undefined;
+  return value?.type === "StringLiteral" ? (value.value as string) : undefined;
+}
+
+/** 动态 import 的固定前缀也必须检查，不能漏掉 `import(`.../${name}.vue`)`。 */
+function importPrefix(node: unknown): string | undefined {
+  const literal = stringValue(node);
+  if (literal !== undefined) return literal;
+  const value = node as AstNode | undefined;
+  if (value?.type !== "TemplateLiteral") return undefined;
+  const first = (value.quasis as Array<{ value: { cooked?: string } }>)[0];
+  return first?.value.cooked;
+}
+
+function invokesBinding(node: unknown, names: string[]): boolean {
+  const value = node as AstNode | undefined;
+  if (!value) return false;
+  if (
+    ["AwaitExpression", "TSAsExpression", "TSNonNullExpression"].includes(
+      value.type,
+    )
+  )
+    return invokesBinding(value.argument ?? value.expression, names);
+  return (
+    ["CallExpression", "OptionalCallExpression"].includes(value.type) &&
+    names.includes(identifier(value.callee) ?? "")
+  );
+}
+
+function references(node: unknown, names: string[]): boolean {
+  let found = false;
+  walk(node, (n) => {
+    if (names.includes(identifier(n) ?? "")) found = true;
+  });
+  return found;
+}
+
+/** 删除数组项时连同它的分隔逗号；支持首项、末项和 spread。 */
+function listEdit(node: AstNode, source: Source): Edit {
+  const edit = nodeEdit(node, source.offset);
+  const following = /^\s*,/.exec(source.content.slice(edit.end));
+  if (following) edit.end += following[0].length;
+  else {
+    const preceding = /,\s*$/.exec(source.content.slice(0, edit.start));
+    if (preceding) edit.start -= preceding[0].length;
+  }
+  return edit;
+}
+
+class TrimPlan {
+  readonly writes = new Map<string, string>();
+  readonly removals = new Set<string>();
+  readonly removedPackages = new Set<string>();
+  constructor(readonly root: string) {}
+  async read(file: string): Promise<string | null> {
+    if (this.writes.has(file)) return this.writes.get(file)!;
+    return (await fs.pathExists(path.join(this.root, file)))
+      ? fs.readFile(path.join(this.root, file), "utf8")
+      : null;
+  }
+  removes(file: string): boolean {
+    return [...this.removals].some(
+      (item) => file === item || file.startsWith(item + "/"),
+    );
+  }
+  async rewrite(
+    file: string,
+    transform: (content: string) => string,
+  ): Promise<void> {
+    const content = await this.read(file);
+    if (content !== null) this.writes.set(file, transform(content));
+  }
+  async sources(): Promise<string[]> {
+    const result: string[] = [];
+    const walkDir = async (relative: string): Promise<void> => {
+      for (const entry of await fs.readdir(path.join(this.root, relative), {
+        withFileTypes: true,
+      })) {
+        if (
+          entry.name.startsWith(".") ||
+          ["node_modules", "dist", "tests", "e2e"].includes(entry.name)
+        )
+          continue;
+        const file = path.posix.join(relative, entry.name);
+        if (this.removes(file)) continue;
+        if (entry.isDirectory()) await walkDir(file);
+        else if (/\.(?:[cm]?[jt]sx?|vue)$/.test(file)) result.push(file);
+      }
+    };
+    await walkDir("");
+    return result;
+  }
+  async removePackages(packages: string[]): Promise<void> {
+    await this.rewrite("package.json", (content) => {
+      const pkg = JSON.parse(content);
+      for (const field of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+      ]) {
+        for (const name of packages) {
+          if (pkg[field]?.[name]) {
+            delete pkg[field][name];
+            this.removedPackages.add(name);
+          }
+        }
+      }
+      return JSON.stringify(pkg, null, 2) + "\n";
     });
-
-    const picked = await p.select({
-      message: "上下键移动，回车切换选中状态（最后选「确认」完成）:",
-      options,
-    });
-
-    if (p.isCancel(picked)) process.exit(0);
-
-    if (picked === CONFIRM_VALUE) break;
-
-    // Toggle the item
-    if (kept.has(picked as string)) {
-      kept.delete(picked as string);
-    } else {
-      kept.add(picked as string);
+  }
+  /** 仅删除没有剩余源码使用的演示依赖，共享运行时始终保留。 */
+  async prunePackages(packages: string[]): Promise<void> {
+    const used = new Set<string>();
+    for (const file of await this.sources()) {
+      for (const source of scriptSources((await this.read(file))!, file)) {
+        const record = (value?: string): void => {
+          if (value)
+            for (const name of packages)
+              if (value === name || value.startsWith(name + "/"))
+                used.add(name);
+        };
+        record(source.externalSource);
+        walk(source.ast, (node) => {
+          record(importPrefix(node));
+        });
+      }
+    }
+    await this.removePackages(packages.filter((name) => !used.has(name)));
+  }
+  async validate(): Promise<void> {
+    for (const file of await this.sources()) {
+      const imports: string[] = [];
+      for (const source of scriptSources((await this.read(file))!, file)) {
+        if (source.externalSource) imports.push(source.externalSource);
+        walk(source.ast, (node) => {
+          if (
+            [
+              "ImportDeclaration",
+              "ExportNamedDeclaration",
+              "ExportAllDeclaration",
+            ].includes(node.type)
+          ) {
+            const value = stringValue(node.source);
+            if (value) imports.push(value);
+          }
+          if (
+            node.type === "CallExpression" &&
+            ((node.callee as AstNode)?.type === "Import" ||
+              identifier(node.callee) === "require")
+          ) {
+            const value = importPrefix((node.arguments as unknown[])?.[0]);
+            if (value) imports.push(value);
+          }
+          if (node.type === "ImportExpression") {
+            const value = importPrefix(node.source);
+            if (value) imports.push(value);
+          }
+        });
+      }
+      for (const source of imports) {
+        const removedPackage = [...this.removedPackages].find(
+          (name) => source === name || source.startsWith(name + "/"),
+        );
+        let resolved: string | undefined;
+        const localSource = source.split(/[?#]/, 1)[0]!;
+        if (localSource.startsWith("@/"))
+          resolved = "src/" + localSource.slice(2);
+        else if (localSource.startsWith("_views/"))
+          resolved = "src/views/" + localSource.slice(7);
+        else if (localSource.startsWith("."))
+          resolved = path.posix.normalize(
+            path.posix.join(path.posix.dirname(file), localSource),
+          );
+        if (
+          removedPackage ||
+          (resolved &&
+            [
+              resolved,
+              resolved + ".ts",
+              resolved + ".vue",
+              resolved + "/index.ts",
+              resolved.replace(/\.[cm]?js$/, ".ts"),
+            ].some((target) => this.removes(target)))
+        ) {
+          throw new Error(
+            `模板裁剪未应用：${file} 仍依赖将被移除的 ${source}。模板结构可能已更新，请选择完整演示或保留对应模块。`,
+          );
+        }
+      }
     }
   }
+  async apply(): Promise<void> {
+    await this.validate();
+    for (const [file, content] of this.writes)
+      if (!this.removes(file))
+        await fs.outputFile(path.join(this.root, file), content);
+    for (const file of this.removals)
+      await fs.remove(path.join(this.root, file));
+  }
+}
 
-  const groupsToTrim = TRIM_TOGGLES.filter((t) => !kept.has(t.id)).map(
-    (t) => t.id,
+async function removeSymbols(
+  plan: TrimPlan,
+  file: string,
+  names: string[],
+  modules: string[] = [],
+): Promise<void> {
+  await plan.rewrite(file, (content) => {
+    const source = scriptSource(content, file);
+    const edits: Edit[] = [];
+    const bindings = new Set(names);
+    walk(source.ast, (node) => {
+      if (
+        node.type === "ImportDeclaration" &&
+        modules.includes(stringValue(node.source) ?? "")
+      ) {
+        for (const specifier of node.specifiers as AstNode[]) {
+          const name = identifier(specifier.local);
+          if (name) bindings.add(name);
+        }
+      }
+    });
+    const removable = [...bindings];
+    walk(source.ast, (node, parent) => {
+      if (
+        [
+          "ImportDeclaration",
+          "ExportNamedDeclaration",
+          "ExportAllDeclaration",
+        ].includes(node.type) &&
+        modules.includes(stringValue(node.source) ?? "")
+      )
+        edits.push(nodeEdit(node, source.offset));
+      if (
+        node.type === "ExpressionStatement" &&
+        invokesBinding(node.expression, removable)
+      )
+        edits.push(nodeEdit(node, source.offset));
+      if (node.type === "VariableDeclaration") {
+        const declarations = node.declarations as AstNode[];
+        const selected = declarations.filter((item) =>
+          names.includes(identifier(item.id) ?? ""),
+        );
+        if (selected.length === declarations.length)
+          edits.push(nodeEdit(node, source.offset));
+        else for (const item of selected) edits.push(listEdit(item, source));
+      }
+      if (
+        parent?.type === "ArrayExpression" &&
+        (node.type === "Identifier" || node.type === "SpreadElement") &&
+        references(node, removable)
+      )
+        edits.push(listEdit(node, source));
+    });
+    const result = applyEdits(content, edits);
+    if (references(scriptSource(result, file).ast, removable)) {
+      throw new Error(
+        `模板 ${file} 仍使用将被移除的 ${removable.join("、")}，已停止裁剪。请保留对应功能或选择完整演示。`,
+      );
+    }
+    return result;
+  });
+}
+
+interface Route {
+  path?: string;
+  children?: Route[];
+}
+async function trimRoutes(plan: TrimPlan, prefixes: string[]): Promise<void> {
+  if (!prefixes.length) return;
+  let found = false;
+  for (const file of [
+    "src/assets/data/dynamicRouter.json",
+    "src/assets/json/dynamicRouter.json",
+  ]) {
+    if ((await plan.read(file)) === null) continue;
+    found = true;
+    await plan.rewrite(file, (content) => {
+      const data = JSON.parse(content);
+      if (!Array.isArray(data.data))
+        throw new Error(`模板菜单格式已变化：${file}，已停止裁剪。`);
+      const filter = (routes: Route[], parent = ""): Route[] =>
+        routes.flatMap((route) => {
+          const absolute = route.path?.startsWith("/")
+            ? route.path
+            : path.posix.join(parent || "/", route.path ?? "");
+          if (
+            prefixes.some(
+              (prefix) =>
+                absolute === prefix || absolute.startsWith(prefix + "/"),
+            )
+          )
+            return [];
+          return [
+            {
+              ...route,
+              ...(route.children
+                ? { children: filter(route.children, absolute) }
+                : {}),
+            },
+          ];
+        });
+      data.data = filter(data.data);
+      return JSON.stringify(data, null, 2) + "\n";
+    });
+  }
+  if (!found)
+    throw new Error(
+      "模板菜单位置已变化，无法安全移除页面。请选择完整演示，或更新 CLI 后重试。",
+    );
+}
+
+async function trimSpline(plan: TrimPlan): Promise<void> {
+  const file = "src/views/login/index.vue";
+  await plan.rewrite(file, (content) => {
+    const { descriptor, errors } = parse(content, { filename: file });
+    if (errors.length)
+      throw new Error("登录页模板无法解析，已停止裁剪 3D 背景。");
+    const edits: Edit[] = [];
+    const splineTags = new Set(["Spline"]);
+    for (const source of scriptSources(content, file))
+      walk(source.ast, (node) => {
+        if (
+          node.type === "ImportDeclaration" &&
+          stringValue(node.source) === "./components/Spline.vue"
+        ) {
+          for (const specifier of node.specifiers as AstNode[]) {
+            const name = identifier(specifier.local);
+            if (name) splineTags.add(name);
+          }
+        }
+      });
+    // Vue 模板 AST 使用整个 SFC 的坐标；同时移除仅为 3D 服务的绑定。
+    const visit = (node: unknown, parent?: Record<string, unknown>): void => {
+      if (!node || typeof node !== "object") return;
+      const element = node as Record<string, unknown>;
+      const loc = element.loc as
+        { start: { offset: number }; end: { offset: number } } | undefined;
+      if (element.type === 1 && splineTags.has(String(element.tag)) && loc) {
+        const siblings = parent?.children as
+          Array<Record<string, unknown>> | undefined;
+        const meaningful = siblings?.filter(
+          (item) =>
+            item.type !== 3 &&
+            !(item.type === 2 && !String(item.content).trim()),
+        );
+        const parentLoc = parent?.loc as typeof loc;
+        const background = (
+          parent?.props as Array<Record<string, unknown>> | undefined
+        )?.some(
+          (prop) =>
+            prop.type === 6 &&
+            prop.name === "class" &&
+            (prop.value as { content?: string } | undefined)?.content
+              ?.split(/\s+/)
+              .includes("spline-background"),
+        );
+        if (
+          parent?.tag === "div" &&
+          background &&
+          meaningful?.length === 1 &&
+          parentLoc
+        )
+          edits.push({
+            start: parentLoc.start.offset,
+            end: parentLoc.end.offset,
+            text: "",
+          });
+        else
+          edits.push({
+            start: loc.start.offset,
+            end: loc.end.offset,
+            text: "",
+          });
+        return;
+      }
+      for (const prop of (element.props ?? []) as Array<
+        Record<string, unknown>
+      >) {
+        const expression = prop.exp as { content?: string } | undefined;
+        const argument = prop.arg as { content?: string } | undefined;
+        if (
+          prop.type === 7 &&
+          ((prop.name === "if" && expression?.content === "!robotReady") ||
+            (prop.name === "on" &&
+              argument?.content === "captcha-visible-change"))
+        ) {
+          const range = prop.loc as typeof loc;
+          if (range)
+            edits.push({
+              start: range.start.offset,
+              end: range.end.offset,
+              text: "",
+            });
+        }
+      }
+      for (const child of (element.children ?? []) as unknown[])
+        visit(child, element);
+    };
+    visit(descriptor.template?.ast);
+    return applyEdits(content, edits);
+  });
+  await removeSymbols(
+    plan,
+    file,
+    ["robotReady", "handleRobotLoad", "captchaVisible"],
+    ["./components/Spline.vue"],
   );
-
-  return { mode: "custom", groupsToTrim };
+  await plan.rewrite(file, (content) => {
+    const { descriptor } = parse(content, { filename: file });
+    const removedBinding = /\b(?:robotReady|handleRobotLoad|captchaVisible)\b/;
+    const check = (node: unknown): void => {
+      if (!node || typeof node !== "object") return;
+      const element = node as Record<string, unknown>;
+      const interpolation =
+        element.type === 5
+          ? (element.content as { content?: string })?.content
+          : undefined;
+      const expressions = (
+        (element.props ?? []) as Array<Record<string, unknown>>
+      ).map((prop) => (prop.exp as { content?: string } | undefined)?.content);
+      if (
+        [interpolation, ...expressions].some(
+          (expression) => expression && removedBinding.test(expression),
+        )
+      ) {
+        throw new Error(
+          "登录页仍使用 3D 背景绑定，模板结构已变化；请保留登录页 3D 背景或选择完整演示。",
+        );
+      }
+      for (const child of (element.children ?? []) as unknown[]) check(child);
+    };
+    check(descriptor.template?.ast);
+    return content;
+  });
+  plan.removals.add("src/views/login/components/Spline.vue");
+  await plan.prunePackages(["@splinetool/runtime"]);
 }
 
-/** Get a human-readable summary of the trim selection */
-export function getTrimSummary(selection: TrimSelection): string {
-  if (selection.mode === "full") return "完整版（保留全部功能）";
-  if (selection.mode === "lite") return "精简版（移除演示 + 保留业务框架）";
-
-  const trimCount = selection.groupsToTrim.length;
-  if (trimCount === 0) return "自定义（保留全部功能）";
-
-  const trimmed = selection.groupsToTrim
-    .map((id) => TRIM_TOGGLES.find((t) => t.id === id)?.label || id)
-    .join("、");
-  return `自定义（移除: ${trimmed}）`;
-}
-
-// ── Trimming Executor ────────────────────────────────────────────
-
-/** Execute trimming on a cloned project */
+/** 全部修改先在内存规划并检查；模板漂移时拒绝，不写入半成品。 */
 export async function executeTrimming(
   projectPath: string,
   selection: TrimSelection,
   spinner?: Ora,
 ): Promise<void> {
-  const { groupsToTrim } = selection;
-  const trimSet = new Set(groupsToTrim);
-
-  const log = (msg: string) => {
-    if (spinner) spinner.text = msg;
-  };
-
-  // Group Z always executes
-  log("清理零使用依赖...");
-  await executeGroupZ(projectPath);
-
-  if (trimSet.size === 0) return;
-
-  // Execute each enabled group
-  if (trimSet.has("demo")) {
-    log("移除演示页面...");
-    await executeGroupA(projectPath);
-  }
-
-  if (trimSet.has("dashboard")) {
-    log("移除仪表盘...");
-    await executeGroupB(projectPath);
-  }
-
-  if (trimSet.has("i18n")) {
-    log("移除国际化...");
-    await executeGroupC(projectPath);
-  }
-
-  if (trimSet.has("analytics")) {
-    log("移除 Vercel Analytics...");
-    await executeGroupD(projectPath);
-  }
-
-  if (trimSet.has("sys-manage")) {
-    log("移除系统管理页面...");
-    await executeGroupE(projectPath);
-  }
-
-  // Group F sub-items
-  if (trimSet.has("directives")) {
-    log("移除 @robot-admin/directives...");
-    await executeGroupF_directives(projectPath);
-  }
-  if (trimSet.has("file-utils")) {
-    log("移除 @robot-admin/file-utils...");
-    await executeGroupF_fileUtils(projectPath);
-  }
-  if (trimSet.has("form-validate")) {
-    log("移除 @robot-admin/form-validate...");
-    await executeGroupF_formValidate(projectPath);
-  }
-  if (trimSet.has("git-standards")) {
-    log("移除 @robot-admin/git-standards...");
-    await executeGroupF_gitStandards(projectPath);
-  }
-
-  if (trimSet.has("iframe-about")) {
-    log("移除外部页面和关于...");
-    await executeGroupG(projectPath);
-  }
-
-  if (trimSet.has("spline-3d")) {
-    log("移除登录页 3D 背景...");
-    await executeGroupH(projectPath);
-  }
-
-  log("模板裁剪完成");
-}
-
-// ── Helpers ──────────────────────────────────────────────────────
-
-/** Safely remove a path (file or directory) */
-async function safeRemove(
-  projectPath: string,
-  relativePath: string,
-): Promise<void> {
-  const fullPath = path.join(projectPath, relativePath);
-  if (await fs.pathExists(fullPath)) {
-    await fs.remove(fullPath);
-  }
-}
-
-/** Safely remove multiple paths */
-async function safeRemoveAll(
-  projectPath: string,
-  paths: string[],
-): Promise<void> {
-  for (const p of paths) {
-    await safeRemove(projectPath, p);
-  }
-}
-
-/** Remove dependencies from package.json */
-async function removeDeps(
-  projectPath: string,
-  deps: string[],
-  dev = false,
-): Promise<void> {
-  const pkgPath = path.join(projectPath, "package.json");
-  if (!(await fs.pathExists(pkgPath))) return;
-
-  const pkg = await fs.readJson(pkgPath);
-  const field = dev ? "devDependencies" : "dependencies";
-  if (!pkg[field]) return;
-
-  for (const dep of deps) {
-    delete pkg[field][dep];
-  }
-  await fs.writeJson(pkgPath, pkg, { spaces: 2 });
-}
-
-/** Remove scripts from package.json */
-async function removeScripts(
-  projectPath: string,
-  scripts: string[],
-): Promise<void> {
-  const pkgPath = path.join(projectPath, "package.json");
-  if (!(await fs.pathExists(pkgPath))) return;
-
-  const pkg = await fs.readJson(pkgPath);
-  if (!pkg.scripts) return;
-
-  for (const s of scripts) {
-    delete pkg.scripts[s];
-  }
-  await fs.writeJson(pkgPath, pkg, { spaces: 2 });
-}
-
-/** Remove route groups from dynamicRouter.json by path prefix */
-async function removeRouteGroups(
-  projectPath: string,
-  pathPrefixes: string[],
-): Promise<void> {
-  const routerPath = path.join(
-    projectPath,
-    "src",
-    "assets",
-    "json",
-    "dynamicRouter.json",
+  const groups = new Set(selection.groupsToTrim);
+  const unsupported = [...groups].filter(
+    (id) => !TOGGLES.some((t) => t.id === id),
   );
-  if (!(await fs.pathExists(routerPath))) return;
-
-  const data = await fs.readJson(routerPath);
-  if (!Array.isArray(data?.data)) return;
-
-  data.data = data.data.filter((route: { path?: string }) => {
-    if (!route.path) return true;
-    return !pathPrefixes.some(
-      (prefix) => route.path === prefix || route.path?.startsWith(prefix + "/"),
+  if (unsupported.length)
+    throw new Error(
+      `不能安全移除 ${unsupported.join("、")}：国际化和共享工具属于核心运行时。请保留它们，或使用新版精简示例预设。`,
     );
-  });
-
-  await fs.writeJson(routerPath, data, { spaces: 2 });
-}
-
-/** Remove lines matching any of the patterns from a file */
-async function removeLinesMatching(
-  projectPath: string,
-  filePath: string,
-  patterns: (string | RegExp)[],
-): Promise<void> {
-  const fullPath = path.join(projectPath, filePath);
-  if (!(await fs.pathExists(fullPath))) return;
-
-  let content = await fs.readFile(fullPath, "utf8");
-  const lines = content.split("\n");
-
-  const filtered = lines.filter((line) => {
-    return !patterns.some((pat) => {
-      if (typeof pat === "string") return line.includes(pat);
-      return pat.test(line);
+  if (!groups.size) return;
+  const plan = new TrimPlan(projectPath);
+  const prefixes: string[] = [];
+  if (spinner) spinner.text = "检查模板结构与模块依赖…";
+  if (groups.has("demo")) {
+    for (const file of [
+      "src/views/demo",
+      "src/views/preview",
+      "src/router/previewRouter.ts",
+    ])
+      plan.removals.add(file);
+    prefixes.push(
+      "/demo",
+      "/plugins",
+      "/editor",
+      "/large-screen",
+      "/hooks",
+      "/directives",
+    );
+    await removeSymbols(
+      plan,
+      "src/router/publicRouter.ts",
+      ["previewRoutes", "previewRoute"],
+      ["./previewRouter", "./previewRouter.ts"],
+    );
+    await plan.rewrite("src/router/routePrefetch.ts", (content) => {
+      const source = scriptSource(content, "src/router/routePrefetch.ts");
+      const edits: Edit[] = [];
+      walk(source.ast, (node) => {
+        if (
+          node.type === "VariableDeclaration" &&
+          (node.declarations as AstNode[]).some(
+            (item) => identifier(item.id) === "HEAVY_ROUTE_LOADERS",
+          )
+        ) {
+          edits.push(
+            nodeEdit(
+              node,
+              0,
+              "const HEAVY_ROUTE_LOADERS: Record<string, RouteLoader> = {}",
+            ),
+          );
+        }
+      });
+      return applyEdits(content, edits);
     });
-  });
-
-  await fs.writeFile(fullPath, filtered.join("\n"));
-}
-
-/** Replace text in a file */
-async function replaceInFile(
-  projectPath: string,
-  filePath: string,
-  search: string | RegExp,
-  replacement: string,
-): Promise<void> {
-  const fullPath = path.join(projectPath, filePath);
-  if (!(await fs.pathExists(fullPath))) return;
-
-  let content = await fs.readFile(fullPath, "utf8");
-  if (typeof search === "string") {
-    content = content.replace(search, replacement);
-  } else {
-    content = content.replace(search, replacement);
+    await plan.rewrite(
+      "src/config/heavyPages.ts",
+      () =>
+        "export const HEAVY_PAGES: Array<{ routePath: string; viewPath: string; reason: string; priority: number }> = []\nexport const HEAVY_PAGE_ROUTES: string[] = []\nexport const DEV_WARMUP_FILES: string[] = []\n",
+    );
+    await plan.rewrite(
+      "src/config/vite/heavyPages.ts",
+      () => "export default []\n",
+    );
   }
-  await fs.writeFile(fullPath, content);
-}
-
-/** Clear a file's content but keep it */
-async function clearFile(projectPath: string, filePath: string): Promise<void> {
-  const fullPath = path.join(projectPath, filePath);
-  if (!(await fs.pathExists(fullPath))) return;
-  await fs.writeFile(fullPath, "export default [];\n");
-}
-
-// ── Group Executors ──────────────────────────────────────────────
-
-/** Group Z: Zero-usage dependencies (always execute) */
-async function executeGroupZ(projectPath: string): Promise<void> {
-  await removeDeps(projectPath, ["vue-command-palette", "motion-v"]);
-}
-
-/** Group A: Demo pages (56 demo dirs + preview + plugins/markdown/highlight/dynamic-components) */
-async function executeGroupA(projectPath: string): Promise<void> {
-  // 1. Remove demo views directory
-  await safeRemove(projectPath, "src/views/demo");
-
-  // 2. Remove preview system
-  await safeRemoveAll(projectPath, [
-    "src/views/preview",
-    "src/router/previewRouter.ts",
-  ]);
-
-  // 3. Remove demo-only local components
-  await safeRemove(projectPath, "src/components/local/c_vTitle");
-
-  // 4. Remove demo-only styles
-  await safeRemoveAll(projectPath, [
-    "src/styles/antv-common.scss",
-    "src/styles/v-md-editor-dark-theme.scss",
-    "src/styles/workflow-theme.scss",
-  ]);
-
-  // 5. Remove demo-only plugins
-  await safeRemoveAll(projectPath, [
-    "src/plugins/highlight.ts",
-    "src/plugins/markdown.ts",
-    "src/plugins/dynamic-components.ts",
-  ]);
-
-  // 6. Clear heavyPages config (keep file structure)
-  await clearFile(projectPath, "src/config/vite/heavyPages.ts");
-
-  // 7. Remove demo-only dependencies
-  await removeDeps(projectPath, [
+  if (groups.has("dashboard")) {
+    plan.removals.add("src/views/dashboard");
+    prefixes.push("/dashboard");
+  }
+  if (groups.has("sys-manage")) {
+    plan.removals.add("src/views/sys-manage");
+    prefixes.push("/sys-manage");
+  }
+  if (groups.has("iframe-about")) {
+    plan.removals.add("src/views/iframe");
+    plan.removals.add("src/views/about");
+    prefixes.push("/iframe", "/about");
+  }
+  await trimRoutes(plan, prefixes);
+  if (groups.has("analytics")) {
+    await removeSymbols(
+      plan,
+      "src/main.ts",
+      ["setupAnalytics"],
+      ["@/plugins/analytics", "./plugins/analytics"],
+    );
+    await removeSymbols(plan, "src/plugins/index.ts", [], ["./analytics"]);
+    plan.removals.add("src/plugins/analytics.ts");
+    await plan.prunePackages(["@vercel/analytics", "@vercel/speed-insights"]);
+  }
+  if (groups.has("spline-3d")) await trimSpline(plan);
+  const demoPackages = [
     "@antv/x6",
     "@kangc/v-md-editor",
     "@visactor/vtable-gantt",
-    "highlight.js",
+    "@visactor/vtable-editors",
     "html2canvas",
     "print-js",
-  ]);
-
-  // 8. Remove demo route groups from dynamicRouter.json
-  await removeRouteGroups(projectPath, [
-    "/demo",
-    "/plugins",
-    "/editor",
-    "/large-screen",
-    "/hooks",
-    "/directives",
-  ]);
-
-  // 9. Modify main.ts — remove setupHighlight / setupMarkdown / setupDynamicComponents
-  await removeLinesMatching(projectPath, "src/main.ts", [
-    "setupHighlight",
-    "setupMarkdown",
-    "setupDynamicComponents",
-  ]);
-
-  // 10. Modify plugins/index.ts — remove related exports
-  await removeLinesMatching(projectPath, "src/plugins/index.ts", [
-    "highlight",
-    "markdown",
-    "dynamic-components",
-  ]);
-
-  // 11. Modify publicRouter.ts — remove previewRoutes
-  await removeLinesMatching(projectPath, "src/router/publicRouter.ts", [
-    "previewRoute",
-    "previewRouter",
-  ]);
-
-  // 12. Modify vite.config.ts — remove @antv/x6 from optimizeDeps
-  await removeLinesMatching(projectPath, "vite.config.ts", ["@antv/x6"]);
-}
-
-/** Group B: Dashboard + ECharts */
-async function executeGroupB(projectPath: string): Promise<void> {
-  // 1. Remove dashboard views
-  await safeRemove(projectPath, "src/views/dashboard");
-
-  // 2. Remove ECharts data
-  await safeRemove(projectPath, "src/assets/data/echarts-package-size.json");
-
-  // 3. Remove ECharts dependency
-  await removeDeps(projectPath, ["echarts"]);
-
-  // 4. Remove dashboard route group
-  await removeRouteGroups(projectPath, ["/dashboard"]);
-
-  // 5. Modify dynamicRouter.ts — remove EAGER_DASH references
-  await removeLinesMatching(projectPath, "src/router/dynamicRouter.ts", [
-    "EAGER_DASH",
-    /dashboard.*glob/i,
-  ]);
-
-  // 6. Modify vite.config.ts — remove echarts from optimizeDeps
-  await removeLinesMatching(projectPath, "vite.config.ts", [/echarts/]);
-}
-
-/** Group C: i18n system */
-async function executeGroupC(projectPath: string): Promise<void> {
-  // 1. Remove i18n files
-  await safeRemoveAll(projectPath, [
-    "lang",
-    "src/utils/plugins/i18n-route.ts",
-    "src/stores/language",
-    "src/config/vite/viteI18nConfig.ts",
-    "scripts/generate-route-translations.ts",
-  ]);
-
-  // 2. Remove i18n devDependency
-  await removeDeps(projectPath, ["vite-auto-i18n-plugin"], true);
-
-  // 3. Remove i18n scripts from package.json
-  await removeScripts(projectPath, ["gen:route-i18n"]);
-
-  // 4. Modify main.ts — remove lang import + i18n-route import
-  await removeLinesMatching(projectPath, "src/main.ts", [
-    "lang/index",
-    "i18n-route",
-  ]);
-
-  // 5. Modify vite.config.ts — remove i18n plugin
-  await removeLinesMatching(projectPath, "vite.config.ts", [
-    "createI18nPlugin",
-    "i18nPlugin",
-    "viteI18nConfig",
-  ]);
-
-  // 6. Modify src/config/vite/index.ts — remove i18n export
-  await removeLinesMatching(projectPath, "src/config/vite/index.ts", [
-    "I18n",
-    "i18n",
-  ]);
-
-  // 7. Modify C_NavbarRight — remove C_Language + languageStore + translateRouteTitle
-  await removeLinesMatching(
-    projectPath,
-    "src/components/global/C_NavbarRight/index.vue",
-    ["C_Language", "s_languageStore", "languageStore", "translateRouteTitle"],
-  );
-
-  // 8. Modify C_Layout — remove translateRouteTitle
-  await removeLinesMatching(
-    projectPath,
-    "src/components/global/C_Layout/index.vue",
-    ["translateRouteTitle"],
-  );
-
-  // 9. Modify C_Header — remove translateRouteTitle
-  await removeLinesMatching(
-    projectPath,
-    "src/components/global/C_Header/index.vue",
-    ["translateRouteTitle"],
-  );
-
-  // 10. Modify App.vue — hardcode zhCN locale, remove languageStore
-  await removeLinesMatching(projectPath, "src/App.vue", [
-    "s_languageStore",
-    "languageStore",
-  ]);
-  // Replace dynamic locale with hardcoded zhCN
-  await replaceInFile(
-    projectPath,
-    "src/App.vue",
-    /languageStore\.naiveLocale/g,
-    "zhCN",
-  );
-  await replaceInFile(
-    projectPath,
-    "src/App.vue",
-    /languageStore\.naiveDateLocale/g,
-    "dateZhCN",
-  );
-
-  // 11. Modify login page — remove language switching
-  await removeLinesMatching(projectPath, "src/views/login/index.vue", [
-    "langStore",
-    "s_languageStore",
-    "languageStore",
-    /changeLang/,
-  ]);
-}
-
-/** Group D: Vercel Analytics */
-async function executeGroupD(projectPath: string): Promise<void> {
-  // 1. Remove analytics plugin
-  await safeRemove(projectPath, "src/plugins/analytics.ts");
-
-  // 2. Remove dependency
-  await removeDeps(projectPath, ["@vercel/analytics"]);
-
-  // 3. Modify main.ts — remove setupAnalytics
-  await removeLinesMatching(projectPath, "src/main.ts", [
-    "setupAnalytics",
-    "analytics",
-  ]);
-
-  // 4. Modify plugins/index.ts — remove analytics export
-  await removeLinesMatching(projectPath, "src/plugins/index.ts", ["analytics"]);
-}
-
-/** Group E: Sys-Manage pages */
-async function executeGroupE(projectPath: string): Promise<void> {
-  // 1. Remove sys-manage views
-  await safeRemove(projectPath, "src/views/sys-manage");
-
-  // 2. Remove related API files
-  await safeRemove(projectPath, "src/api/permission-manage.ts");
-
-  // 3. Remove local components used only by sys-manage
-  await safeRemoveAll(projectPath, [
-    "src/components/local/c_detail",
-    "src/components/local/c_role",
-  ]);
-
-  // 4. Remove route group
-  await removeRouteGroups(projectPath, ["/sys-manage"]);
-}
-
-/** Group F.1: @robot-admin/directives */
-async function executeGroupF_directives(projectPath: string): Promise<void> {
-  await removeDeps(projectPath, ["@robot-admin/directives"]);
-  await removeLinesMatching(projectPath, "src/main.ts", [
-    "setupDirectives",
-    "@robot-admin/directives",
-  ]);
-}
-
-/** Group F.2: @robot-admin/file-utils */
-async function executeGroupF_fileUtils(projectPath: string): Promise<void> {
-  await removeDeps(projectPath, ["@robot-admin/file-utils"]);
-  await safeRemove(projectPath, "src/plugins/file-utils.ts");
-  await removeLinesMatching(projectPath, "src/main.ts", [
-    "setupFileUtils",
-    "file-utils",
-  ]);
-  await removeLinesMatching(projectPath, "src/plugins/index.ts", [
-    "file-utils",
-  ]);
-}
-
-/** Group F.3: @robot-admin/form-validate */
-async function executeGroupF_formValidate(projectPath: string): Promise<void> {
-  await removeDeps(projectPath, ["@robot-admin/form-validate"]);
-}
-
-/** Group F.4: @robot-admin/git-standards */
-async function executeGroupF_gitStandards(projectPath: string): Promise<void> {
-  await removeDeps(projectPath, ["@robot-admin/git-standards"]);
-}
-
-/** Group G: iframe + about */
-async function executeGroupG(projectPath: string): Promise<void> {
-  await safeRemoveAll(projectPath, ["src/views/iframe", "src/views/about"]);
-  await removeRouteGroups(projectPath, ["/iframe", "/about"]);
-}
-
-/** Group H: Login 3D background (Spline) */
-async function executeGroupH(projectPath: string): Promise<void> {
-  // 1. Remove Spline component
-  await safeRemove(projectPath, "src/views/login/components/Spline.vue");
-
-  // 2. Remove dependency
-  await removeDeps(projectPath, ["@splinetool/runtime"]);
-
-  // 3. Modify login page — remove Spline import and usage
-  await removeLinesMatching(projectPath, "src/views/login/index.vue", [
-    "Spline",
-    "spline",
-  ]);
-
-  // 4. Modify vite build config — remove splinetool chunk config
-  await removeLinesMatching(projectPath, "src/config/vite/viteBuildConfig.ts", [
-    "splinetool",
-    "spline",
-  ]);
+  ];
+  if (groups.has("demo")) await plan.prunePackages(demoPackages);
+  if (groups.has("demo") || groups.has("dashboard"))
+    await plan.prunePackages(["echarts"]);
+  await plan.apply();
+  if (spinner) spinner.text = "模块与菜单已同步，共享运行时已保留";
 }

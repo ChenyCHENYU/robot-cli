@@ -1,440 +1,173 @@
-<div align="center">
-
 # Robot CLI
 
-**一条命令，搭建标准化工程项目**
+从 Robot 的 PC 管理后台和移动 H5 模板创建项目，选择用途、设置产品名称，再按实际运行要求初始化。
 
 [![npm](https://img.shields.io/npm/v/@agile-team/robot-cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agile-team/robot-cli)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/CLI_Node-20.12%2B%20%7C%2022%2B-43853d)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**中文** | [English](#english)
-
-</div>
-
----
-
-## 为什么用 Robot CLI
-
-- **4 个稳定模板 + Robot H5 Beta**：覆盖 Vue 中后台、Monorepo、微前端、模块联邦和企业移动 H5
-- **模板配置系统**：Robot Admin 支持 Full / Lite / Custom 三档配置，按需裁剪演示页面和可选功能
-- **秒级下载**：`git clone --depth=1` 引擎，和 create-vue / degit 同方案，自动走系统代理
-- **国内友好**：Gitee 优先 → GitHub 兜底 → HTTP ZIP 二次兜底，三层容错
-- **现代交互**：基于 @clack/prompts，4 种选模板方式，实时进度条，确认面板
-- **离线可用**：首次下载自动缓存，断网也能创建项目
-- **零配置**：自动检测 bun/pnpm/yarn/npm，自动初始化 Git，开箱即用
-
----
+> **3.3.0** 更新：三步创建向导、精简模板入口、真实多选、项目启动指引、模板运行复验，以及可重复的终端与安装包验收。详细变更见 [更新日志](CHANGELOG.md)。
 
 ## 快速开始
 
 ```bash
-# 零安装体验（推荐）
 npx @agile-team/robot-cli create my-project
-# 或
+# 或使用 Bun
 bunx @agile-team/robot-cli create my-project
 
-# 全局安装后使用
+# 全局安装
 npm i -g @agile-team/robot-cli
 robot create
 ```
 
----
+CLI 本身支持 Node.js 20.12+（20.x）或 22+，建议使用 Node.js 24。交互依赖使用的 `util.styleText` 从 [Node 20.12](https://nodejs.org/en/blog/release/v20.12.0) 提供；项目模板还有各自的版本和包管理器要求：
 
-## 模板配置系统
+| 项目 | 当前运行要求 | 用途 |
+| --- | --- | --- |
+| Robot Admin | Node.js ≥22.18.0、Bun ≥1.4.2 | PC 管理后台 |
+| Robot H5（Beta） | Node.js `^22.13.0 \|\| ^24.0.0`、pnpm 11.8.0 | 移动浏览器、企业 WebView |
 
-选择 **Robot Admin 完整版** 时，CLI 会自动询问模板配置模式：
+注册表提供创建前提示；下载后会读取模板的 manifest 或 `package.json` 复验实际要求。Node 不兼容时在写入项目之前停止；包管理器缺失或版本不符时先生成文件，提示补齐环境后安装。
 
-```
-◆  选择模板配置:
-│  ○ 完整版（Full）- 包含所有演示页面和功能模块
-│  ● 精简版（Lite）- 移除演示页面，保留核心业务框架  ⭐ 推荐
-│  ○ 自定义（Custom）- 自行选择要保留的模块
-```
+## 三步创建
 
-| 模式 | 说明 | 适用场景 |
-|------|------|---------|
-| **Full** | 保留全部 74 个页面、所有功能和依赖 | 学习参考、功能演示 |
-| **Lite** ⭐ | 移除 56 个演示页面 + 仪表盘 + i18n + 3D 背景等，保留核心业务框架 + 系统管理 | 实际项目开发 |
-| **Custom** | 逐项选择要保留的页面模块、功能模块、可选包 | 定制化需求 |
+1. **选择项目与用途**：先选 PC 管理后台或移动 H5；需要 Monorepo、MicroApp、模块联邦时进入“更多架构”。PC 主分支再选择精简示例、完整演示或自定义预设。
+2. **设置产品与初始化方式**：填写产品名称，选择默认初始化、先生成文件或调整安装与 Git 设置。产品名称用于应用标题，与包名、项目描述分别维护。
+3. **核对并创建**：查看目录、预设、运行要求、包管理器、来源和接入提示。完成页显示 Git 提交与依赖安装的实际结果，并给出启动命令。
 
-> 裁剪在模板下载后自动执行，其他模板不受影响，现有 CLI 功能完全不变。
+默认尝试初始化 Git `main` 分支并安装依赖。首次提交未完成会提示检查 Git 身份；依赖安装失败会保留项目文件并返回失败状态，覆盖已有目录时还会保留旧目录备份并显示路径，便于恢复或重试。
 
----
+## PC 预设
 
-## 可用模板
+仅 `robot-admin` 主分支支持裁剪：
 
-### 已上线
+| 预设 | 行为 |
+| --- | --- |
+| `lite` · 精简示例 | 移除组件演示与预览、分析仪表盘、外部页面与关于、登录页 3D 背景、Vercel 统计；保留认证、布局、系统管理、国际化、共享工具和行业样例 |
+| `full` · 完整演示 | 保留模板全部示例与功能 |
+| `custom` · 自定义 | 交互选择保留上述页面与可选功能；国际化和共享运行时始终保留 |
 
-| 模板 | 架构 | 技术栈 | 仓库分支 |
-|------|------|--------|---------|
-| **Robot Admin** 完整版 | 单体应用 | Vue 3 + Naive UI + Pinia + 权限 + 图表 + 50+ 示例 | `main` |
-| **Robot Monorepo** | Monorepo | bun workspace + 多包管理 + 共享组件 | `monorepo` |
-| **Robot MicroApp** | 微前端 | MicroApp + 主子应用 + 路由共享 | `micro-app` |
-| **Robot Module Federation** | 模块联邦 | Vite Module Federation + 远程模块 | `module-federation` |
+Lite 是减少展示内容的起点，仍包含行业样例，接入业务时需继续配置接口与菜单。裁剪同步页面与菜单入口，仅删除没有剩余源码引用的演示依赖；发现无法安全处理的模板结构时停止，并提示选择 Full 或保留对应模块。
 
-> 前 4 个模板共用仓库 [ChenyCHENYU/Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)，不同架构通过分支区分。
+## 可选模板
 
-### Beta
+| 模板 key | 入口 | 来源分支 |
+| --- | --- | --- |
+| `robot-admin` | 默认 · PC 管理后台 | `Robot_Admin/main` |
+| `robot-h5` | 默认 · 移动 H5 / 企业 WebView（Beta） | `Robot_H5/main` |
+| `robot-monorepo` | 更多架构 · Bun Workspaces | `Robot_Admin/monorepo` |
+| `robot-micro-app` | 更多架构 · MicroApp 主子应用 | `Robot_Admin/micro-app` |
+| `robot-module-federation` | 更多架构 · 模块联邦 | `Robot_Admin/module-federation` |
 
-| 模板 | 场景 | 技术栈 | 运行要求 |
-|------|------|--------|----------|
-| **Robot H5** | 企业 H5 / 微信与钉钉浏览器 / App WebView | Vue 3 + Vite 7 + Vant 4 + Bridge | Node 22.12/24 + pnpm 11.8 |
+高级架构沿用各分支自己的启动与部署约定，暂不支持 PC 主分支的 Lite/Custom 裁剪。直接使用 `-t` 也可选择对应入口。
 
-Robot H5 使用模板自带的 `template.manifest.json` 契约初始化。CLI 会校验模板身份、
-Node.js 和包管理器要求，再安全调用模板的非交互初始化器。当前为 Beta，请先在测试项目验证。
-robot-cli 每周还会真实执行冻结依赖安装与生产构建，及时发现上游模板漂移。
+Robot H5 当前包含 wl-mbase 企业集成环境。创建后先核对 `project.config.json`、`build/environments.json` 中的后端地址、宿主模式和部署路径；构建环境由 `dev / sit / uat / pre / main` 分支决定。独立 H5 需按模板文档调整这些配置，宿主 SDK、正式接口和真机能力仍需实际接入验证。UniApp 暂未注册为内置模板。
 
-### 开发中
-
-Robot Admin 精简版 · React 全家桶 · NestJS 后端 · Electron 桌面端 — 即将上线，敬请期待。
-
----
-
-## 命令
-
-### `robot create [name]`
-
-交互式创建项目，全流程引导。
+## 命令与参数
 
 ```bash
-robot create                              # 交互式
-robot create my-app -t robot-admin        # 指定模板
-robot create mobile-app -t robot-h5       # Robot H5 Beta（要求 Node 24 + pnpm 11.8）
-robot create my-app --from https://github.com/org/repo  # 自定义仓库
-robot create my-app --dry-run             # 预览，不实际创建
-robot create my-app --skip-install        # 跳过依赖安装
-robot create my-app --no-cache            # 强制重新下载
+robot create my-admin --yes                         # 默认 PC 精简预设，无交互
+robot create my-admin --yes --preset full --no-git   # 完整演示，不初始化 Git
+robot create mobile-app -t robot-h5 --yes --title "现场作业"
+robot create my-app --yes --dry-run                  # 预览，不下载或写入项目
+robot create my-app --yes --skip-install             # 只生成文件，稍后安装
+robot create my-app --yes --no-cache                 # 绕过缓存，重新下载
+robot create --advanced                             # 直接浏览更多架构
+robot create my-app --from https://github.com/org/repo
 ```
 
-### `robot list`
+| 参数 | 说明 |
+| --- | --- |
+| `-t, --template <key>` | 指定内置模板，未知或未上线的模板立即报错 |
+| `-y, --yes` | 使用默认值创建，必须提供项目目录；默认 PC 预设为 `lite` |
+| `--preset <lite\|full\|custom>` | PC 主分支用途预设；Custom 需要交互，不能与 `--yes` 同用 |
+| `--title <title>` | 应用展示名称，默认与项目目录相同 |
+| `--description <text>` / `--author <name>` | 项目描述与作者 |
+| `--package-manager <name>` | 为允许选择的模板指定 bun、pnpm、yarn 或 npm；模板要求优先 |
+| `--no-git` / `--skip-install` | 分别跳过 Git 初始化、依赖安装 |
+| `--dry-run` | 预览创建计划；远端契约在正式下载后校验 |
+| `--no-cache` | 不读取或写入模板缓存 |
+| `--advanced` | 在交互创建时直接显示完整的可用架构列表 |
+| `--from <url>` | 使用自定义 Git 仓库，与 `--template` 互斥 |
+
+自动化或重定向输入时使用 `--yes`。已有目录不会被 `--yes` 覆盖；交互创建会先确认并备份，文件生成失败后恢复原目录。下载期间若另一个进程创建了目标目录，CLI 会停止，不合并或删除该目录。
+
+自定义仓库使用通用项目初始化，并读取 `package.json` 的运行要求；不会自动执行仓库里的模板初始化脚本。启动方式与业务接入以原仓库 README 为准。
 
 ```bash
-robot list           # 查看所有模板
-robot list -r        # 只看推荐模板
+robot list                 # 可用模板
+robot list -r              # 默认推荐起点
+robot list --all           # 额外查看尚未上线的规划
+robot search h5            # 按名称、技术或功能搜索可用模板
+robot search react --all   # 搜索范围包含规划
+robot doctor               # CLI 环境诊断
+robot doctor -t robot-admin # 按 PC 模板检查 Node 与 Bun 要求
+robot doctor -t robot-h5    # 按 H5 模板检查 Node 与 pnpm 要求
+robot doctor --clear-cache # 清理模板缓存
 ```
 
-### `robot search <keyword>`
+`doctor` 可按指定模板检查 Node 和必需包管理器，并给出下一步命令；Git 与其他包管理器缺失作为可选信息显示。下载后的真实契约仍由创建流程复验。
 
-```bash
-robot search vue     # 搜 Vue 相关
-robot search 微前端  # 搜中文关键词
-```
+## 生成后从哪里继续
 
-### `robot doctor`
+原模板 README 保留，另外生成：
 
-```bash
-robot doctor                # 环境诊断（Node/Git/包管理器/网络）
-robot doctor --clear-cache  # 清理模板缓存
-```
+- **`ROBOT_PROJECT.md`**：当前预设、运行要求、启动与检查命令，以及 PC/H5 的首次接入事项。
+- **`.robot-cli/project.json`**：模板来源、分支、包版本、创建时间、运行要求和缓存来源记录。Git 下载会记录解析出的 commit；无法可靠识别 commit 的归档下载明确标为未提供。
 
----
+这些记录帮助确认项目来自哪里、如何继续开发；文件生成和依赖安装完成不代表正式接口、宿主或部署已经验收。H5 自带初始化器生成的 `.jhlc/project.json` 仍按模板自身约定保留。
 
-## 下载机制
+## 下载与缓存
 
-Robot CLI 使用三层容错策略：
+有镜像配置时先尝试 Gitee Git 克隆，再尝试原仓库；Git 失败后使用 HTTP ZIP 下载并切换可用源。Git 继承系统代理配置；HTTP 响应、内容、解压与项目根目录都会验证，失败信息保留来源与原因。
 
-```
-1. git clone --depth=1 (Gitee)     ← 国内最快
-2. git clone --depth=1 (GitHub)    ← 自动继承系统代理
-3. HTTP ZIP 下载 (codeload CDN)    ← git 不可用时兜底
-```
+模板缓存位于 `~/.robot-cli/cache/`：
 
-- 实时显示 git 克隆进度条（百分比 + 速度）
-- 首次下载自动缓存到 `~/.robot-cli/cache/`
-- 断网时使用缓存版本
+- **24 小时内**复用缓存，展示下载时间与来源。
+- **缓存过期**先联网刷新；所有下载方式失败时可降级使用旧缓存，并明确提示。
+- **`--no-cache`** 强制联网下载；`robot doctor --clear-cache` 清理缓存。
 
----
+Git 克隆和 HTTP 下载均有超时处理，下载中按 Ctrl+C 会终止任务并清理本次临时数据。缓存命中不保证上游最新；需要最新内容时使用 `--no-cache`。
 
-## 项目结构
-
-```
-robot-cli/
-├── bin/robot.js                    # CLI 入口
-├── src/
-│   ├── index.ts                    # Commander 命令注册 + Banner
-│   ├── create.ts                   # 交互式创建流程
-│   ├── download.ts                 # 下载引擎（git clone + HTTP 兜底）
-│   ├── templates.ts                # 模板查询
-│   ├── doctor.ts                   # 环境诊断
-│   ├── utils.ts                    # 工具函数
-│   ├── types.ts                    # 类型定义
-│   ├── trimmer/
-│   │   └── index.ts                # 模板配置裁剪引擎
-│   └── config/
-│       ├── templates.config.ts     # 模板注册表（所有模板定义在这里）
-│       └── cli.config.ts           # CLI 配置（推荐列表、启动命令等）
-├── tests/                          # Vitest 单元测试
-├── tsup.config.ts                  # 构建配置（ESM, node20）
-└── .github/workflows/              # 提交与 PR 的 CI 检查
-```
-
----
-
-## 二次开发
-
-### 本地开发
+## 本地开发与验证
 
 ```bash
 git clone https://github.com/ChenyCHENYU/robot-cli.git
 cd robot-cli
-bun install
-bun run dev    # watch 构建
-bun link       # 全局链接
-robot create   # 测试
+bun install --frozen-lockfile
+bun run build
+node bin/robot.js create my-app --yes --dry-run
+
+bun run dev        # 监听构建
+bun run check      # lint、typecheck、单元与命令回归
+bun run build      # 发布产物构建
+bun run smoke:terminal # 真实终端交互回归（macOS / Linux，需要 Python 3）
+bun run test:package   # 打包后在独立目录安装生产依赖，检查 Node/Bun 入口
+
+# 模板真实生成验收（需要联网安装依赖）
+bun run smoke:robot-admin -- --preset all
+bun run smoke:robot-h5
 ```
 
-### 添加模板
+模板注册位于 [src/config/templates.config.ts](src/config/templates.config.ts)。通用模板需要根目录有效的 `package.json`；需要专用初始化时，显式注册 manifest 身份和无 shell 的 Node 脚本入口。当前 H5 使用 manifest，其他模板主要读取 `package.json`，尚未统一全部模板协议。
 
-编辑 [src/config/templates.config.ts](src/config/templates.config.ts)：
+CI 检查 Node 20/22/24 下的 CLI，并在 Node 24 检查真实终端交互。模板定时/手动冒烟覆盖 PC Full/Lite 与 H5 的独立安装和构建；高级架构及移动真机仍需各自验收。
 
-```ts
-"your-template": {
-  name: "模板名称",
-  description: "模板描述",
-  repoUrl: "https://github.com/org/repo",
-  branch: "main",
-  features: ["特性1", "特性2"],
-  version: "full",
-}
-```
-
-模板仓库要求：根目录有 `package.json`。
-
-### 构建 & 测试
-
-```bash
-bun run build      # tsup 构建
-bun run test       # Vitest 测试
-bun run typecheck  # TypeScript 类型检查
-bun run lint       # oxlint 代码检查
-```
-
-### 发布
-
-```bash
-bun run check             # 完整质量检查
-bun run release:dry-run   # 检查 npm 包内容
-bun run release:patch     # 生成版本提交和 tag（也可用 minor / major）
-bun run release:publish   # 本地登录 npm 后发布；自动检查并构建 dist
-git push origin main
-git push origin vX.Y.Z    # 单独推送本次 tag
-```
-
-npm 包由维护者在本地通过 Bun 发布；`prepublishOnly` 会执行完整质量检查，`prepack`
-会自动构建发布所需的 `dist`。GitHub Actions 只运行 CI，不接触 npm 凭据，也不参与
-发版。请单独推送本次 tag，不要使用 `--follow-tags` 批量推送历史标签。
-
-### 技术栈
-
-TypeScript 5.7+ · tsup 8 · Vitest 3 · @clack/prompts · Commander · Node ≥ 20
-
----
-
-## FAQ
-
-**模板下载失败？**
-
-```bash
-robot doctor   # 先诊断环境
-# 确保系统已安装 git 且网络可用
-```
-
-**`command not found: robot`？**
-
-```bash
-npx @agile-team/robot-cli create   # 免安装使用
-# 或重新全局安装
-npm i -g @agile-team/robot-cli
-```
-
-**如何选架构？**
-
-| 场景 | 推荐模板 |
-|------|---------|
-| 中小后台项目 | `robot-admin` |
-| 大型项目、多包共享 | `robot-monorepo` |
-| 多团队协作、独立部署 | `robot-micro-app` |
-| 运行时模块共享 | `robot-module-federation` |
-| 企业 H5、微信/钉钉浏览器、App WebView | `robot-h5`（Beta） |
-
----
-
-## 链接
-
-- [npm](https://www.npmjs.com/package/@agile-team/robot-cli)
-- [GitHub](https://github.com/ChenyCHENYU/robot-cli)
-- [模板仓库 Robot_Admin](https://github.com/ChenyCHENYU/Robot_Admin)
-- [模板仓库 Robot_H5](https://github.com/ChenyCHENYU/Robot_H5)
-- [路线图](ROADMAP.md)
-- [更新日志](CHANGELOG.md)
-
----
-
-<a name="english"></a>
-
-<div align="center">
-
-# Robot CLI
-
-**One command to scaffold production-ready projects**
-
-[![npm](https://img.shields.io/npm/v/@agile-team/robot-cli?color=cb3837&label=npm)](https://www.npmjs.com/package/@agile-team/robot-cli)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-43853d)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-[中文](#) | **English**
-
-</div>
-
----
-
-## Why Robot CLI
-
-- **4 stable templates + Robot H5 Beta**: Vue admin, Monorepo, micro-frontends, Module Federation, and enterprise mobile H5
-- **Template configuration system**: Robot Admin supports Full / Lite / Custom modes — trim demo pages and optional features on demand
-- **Instant download**: `git clone --depth=1` engine, same approach as create-vue / degit, inherits system proxy
-- **China-friendly**: Gitee first → GitHub fallback → HTTP ZIP fallback, triple fault-tolerance
-- **Modern UX**: @clack/prompts, 4 template selection modes, real-time progress, confirmation panels
-- **Offline support**: Auto-cached after first download, works without internet
-- **Zero config**: Auto-detects bun/pnpm/yarn/npm, auto-inits Git, works out of the box
-
----
-
-## Quick Start
-
-```bash
-# Zero-install (recommended)
-npx @agile-team/robot-cli create my-project
-# or
-bunx @agile-team/robot-cli create my-project
-
-# Global install
-npm i -g @agile-team/robot-cli
-robot create
-```
-
----
-
-## Template Configuration
-
-When selecting **Robot Admin Full**, the CLI offers three configuration modes:
-
-```
-◆  Select template configuration:
-│  ○ Full — Keep all demo pages and features
-│  ● Lite — Remove demos, keep core business framework  ⭐ Recommended
-│  ○ Custom — Choose modules to keep
-```
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Full** | All 74 pages, all features and deps | Learning, demos |
-| **Lite** ⭐ | Remove 56 demo pages + dashboard + i18n + 3D login + more, keep core + sys-manage | Real projects |
-| **Custom** | Pick individual page modules, features, optional packages | Custom needs |
-
-> Trimming runs automatically after download. Other templates are not affected.
-
----
-
-## Available Templates
-
-| Template | Architecture | Stack | Branch |
-|----------|-------------|-------|--------|
-| **Robot Admin** Full | Monolith | Vue 3 + Naive UI + Pinia + Auth + Charts + 50+ demos | `main` |
-| **Robot Monorepo** | Monorepo | bun workspace + multi-package | `monorepo` |
-| **Robot MicroApp** | Micro-frontend | MicroApp + sub-apps + shared routing | `micro-app` |
-| **Robot Module Federation** | Module Federation | Vite Module Federation + remote modules | `module-federation` |
-
-### Beta
-
-| Template | Use case | Stack | Runtime |
-|----------|----------|-------|---------|
-| **Robot H5** | Enterprise H5 / WeChat and DingTalk browsers / App WebView | Vue 3 + Vite 7 + Vant 4 + Bridge | Node 22.12/24 + pnpm 11.8 |
-
-Robot H5 is initialized through its `template.manifest.json` contract. The CLI validates
-template identity and runtime constraints before invoking its non-interactive initializer.
-Its weekly smoke test also performs a frozen dependency install and production build.
-
----
-
-## Commands
-
-### `robot create [name]`
-
-```bash
-robot create                              # Interactive
-robot create my-app -t robot-admin        # Specify template
-robot create mobile-app -t robot-h5       # Robot H5 Beta (Node 24 + pnpm 11.8)
-robot create my-app --from https://github.com/org/repo  # Custom repo
-robot create my-app --dry-run             # Preview only
-robot create my-app --skip-install        # Skip deps install
-robot create my-app --no-cache            # Force re-download
-```
-
-### `robot list` / `robot search <keyword>` / `robot doctor`
-
-```bash
-robot list              # List all templates
-robot list -r           # Recommended only
-robot search vue        # Search by keyword
-robot doctor            # Environment diagnostic
-robot doctor --clear-cache  # Clear template cache
-```
-
----
-
-## Download Strategy
-
-```
-1. git clone --depth=1 (Gitee)     ← Fastest in China
-2. git clone --depth=1 (GitHub)    ← Inherits system proxy
-3. HTTP ZIP (codeload CDN)         ← Fallback when git unavailable
-```
-
----
-
-## Development
-
-```bash
-git clone https://github.com/ChenyCHENYU/robot-cli.git
-cd robot-cli
-bun install
-bun run dev        # Watch build
-bun run build      # Production build
-bun run test       # Vitest unit tests
-bun run typecheck  # TypeScript check
-bun run lint       # oxlint
-```
-
-### Release
+## 发布
 
 ```bash
 bun run check
+bun run smoke:terminal
+bun run test:package
 bun run release:dry-run
-bun run release:patch     # or release:minor / release:major
-bun run release:publish   # checks and builds dist automatically
+bun run release:patch     # 确定发版时再执行；也可选择 minor / major
+bun run release:publish   # 本地登录 npm 后发布
 git push origin main
-git push origin vX.Y.Z    # push only this tag
+git push origin vX.Y.Z    # 仅推送本次 tag
 ```
 
-The maintainer publishes the npm package locally with Bun. `prepublishOnly` runs the
-quality checks and `prepack` builds `dist` automatically. GitHub Actions only runs CI;
-it never receives npm credentials and does not participate in releases. Push the new tag
-explicitly instead of using `--follow-tags` with historical tags.
+维护者使用 Bun 在本地发布。`prepublishOnly` 执行检查，`prepack` 构建 `dist`；GitHub Actions 负责 CI，不持有 npm 凭据。发布前更新版本、README 和 CHANGELOG，并验证打包后的安装入口；仅推送本次版本标签。
 
-**Tech Stack**: TypeScript 5.7+ · tsup 8 · Vitest 3 · @clack/prompts · Commander · Node ≥ 20
-
----
-
-## Links
-
-- [npm](https://www.npmjs.com/package/@agile-team/robot-cli)
-- [GitHub](https://github.com/ChenyCHENYU/robot-cli)
-- [Template Repo](https://github.com/ChenyCHENYU/Robot_Admin)
-- [Roadmap](ROADMAP.md)
-- [Changelog](CHANGELOG.md)
-
-## License
+[GitHub](https://github.com/ChenyCHENYU/robot-cli) · [Robot Admin](https://github.com/ChenyCHENYU/Robot_Admin) · [Robot H5](https://github.com/ChenyCHENYU/Robot_H5) · [路线图](ROADMAP.md) · [更新日志](CHANGELOG.md)
 
 MIT

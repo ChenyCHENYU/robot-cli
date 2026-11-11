@@ -1,7 +1,9 @@
 import fs from "fs-extra";
 import path from "node:path";
+import os from "node:os";
 import chalk from "chalk";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { gt, valid } from "semver";
 import type { PackageManager, ProjectStats } from "./types";
 
 // ── Package Manager Detection ────────────────────────────────────
@@ -11,12 +13,7 @@ export function detectPackageManager(): PackageManager[] {
   const checks: PackageManager[] = ["bun", "pnpm", "yarn", "npm"];
 
   for (const pm of checks) {
-    try {
-      execSync(`${pm} --version`, { stdio: "ignore" });
-      managers.push(pm);
-    } catch {
-      // not installed
-    }
+    if (getPackageManagerVersion(pm)) managers.push(pm);
   }
   return managers.length > 0 ? managers : ["npm"];
 }
@@ -27,6 +24,7 @@ export function getGitUser(): string {
   try {
     return execSync("git config user.name", {
       stdio: ["pipe", "pipe", "ignore"],
+      timeout: 5000,
     })
       .toString()
       .trim();
@@ -51,7 +49,7 @@ export function validateProjectName(name: string): {
   if (t.length === 0) errors.push("项目名称不能为空");
   if (t.length > 214) errors.push("项目名称不能超过214个字符");
   if (t.toLowerCase() !== t) errors.push("项目名称只能包含小写字母");
-  if (/^[._]/.test(t)) errors.push('项目名称不能以 "." 或 "_" 开头');
+  if (/^[._-]/.test(t)) errors.push('项目名称不能以 "."、"_" 或 "-" 开头');
   if (t.endsWith(".")) errors.push('项目名称不能以 "." 结尾');
   if (!/^[a-z0-9._-]+$/.test(t))
     errors.push("项目名称只能包含字母、数字、点、下划线和短横线");
@@ -112,7 +110,7 @@ export async function checkForUpdates(
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { version: string };
-    return data.version !== currentVersion ? data.version : null;
+    return valid(data.version) && valid(currentVersion) && gt(data.version, currentVersion) ? data.version : null;
   } catch {
     return null;
   }
@@ -122,15 +120,16 @@ export async function checkForUpdates(
 
 async function countFiles(dirPath: string): Promise<number> {
   let count = 0;
-  const skip = new Set(["node_modules", ".git", ".DS_Store"]);
+  const skip = new Set(["node_modules", ".git", ".DS_Store", ".idea"]);
 
   async function walk(dir: string): Promise<void> {
     const items = await fs.readdir(dir);
     for (const item of items) {
       const full = path.join(dir, item);
-      const stat = await fs.stat(full);
+      if (skip.has(item)) continue;
+      const stat = await fs.lstat(full);
       if (stat.isDirectory()) {
-        if (!skip.has(item)) await walk(full);
+        await walk(full);
       } else {
         count++;
       }
@@ -157,11 +156,11 @@ export async function copyTemplate(
   if (spinner) spinner.text = `开始复制 ${totalFiles} 个文件...`;
 
   let copied = 0;
+  const sourceRoot = await fs.realpath(sourcePath);
   const skipDirs = new Set([
     "node_modules",
     ".git",
     ".DS_Store",
-    ".vscode",
     ".idea",
   ]);
 
@@ -170,14 +169,26 @@ export async function copyTemplate(
     for (const item of items) {
       const s = path.join(src, item);
       const d = path.join(dest, item);
-      const stat = await fs.stat(s);
+      if (skipDirs.has(item)) continue;
+      const stat = await fs.lstat(s);
 
       if (stat.isDirectory()) {
-        if (skipDirs.has(item)) continue;
         await fs.ensureDir(d);
         await copyDir(s, d);
       } else {
-        await fs.copy(s, d);
+        if (stat.isSymbolicLink()) {
+          const link = await fs.readlink(s);
+          const target = await fs.realpath(s).catch(() => {
+            throw new Error(`模板符号链接无效：${path.relative(sourcePath, s)}`);
+          });
+          const relativeTarget = path.relative(sourceRoot, target);
+          if (path.isAbsolute(link) || relativeTarget === ".." || relativeTarget.startsWith(`..${path.sep}`) || path.isAbsolute(relativeTarget)) {
+            throw new Error(`模板符号链接指向仓库外部：${path.relative(sourcePath, s)}`);
+          }
+          await fs.symlink(link, d, (await fs.stat(s)).isDirectory() ? "dir" : "file");
+        } else {
+          await fs.copy(s, d, { overwrite: false, errorOnExist: true });
+        }
         copied++;
         if (spinner && (copied % 10 === 0 || copied === totalFiles)) {
           const pct = Math.round((copied / totalFiles) * 100);
@@ -195,6 +206,7 @@ export async function installDependencies(
   projectPath: string,
   spinner: import("ora").Ora | undefined,
   packageManager: PackageManager = "npm",
+  signal?: AbortSignal,
 ): Promise<boolean> {
   try {
     const pkgJson = path.join(projectPath, "package.json");
@@ -203,19 +215,24 @@ export async function installDependencies(
       return false;
     }
 
-    const cmds: Record<PackageManager, string> = {
-      bun: "bun install",
-      pnpm: "pnpm install",
-      yarn: "yarn install",
-      npm: "npm install",
-    };
-
     if (spinner) spinner.text = `使用 ${packageManager} 安装依赖...`;
-
-    execSync(cmds[packageManager], {
-      cwd: projectPath,
-      stdio: "ignore",
-      timeout: 300_000,
+    signal?.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(packageManager, ["install"], {
+        cwd: projectPath,
+        stdio: "inherit",
+        // Windows package-manager shims are .cmd files; the command is a closed enum.
+        shell: process.platform === "win32",
+        timeout: 300_000,
+        signal,
+      });
+      let processError: Error | undefined;
+      child.once("error", (error) => { processError = error; });
+      child.once("close", (code, exitSignal) => {
+        if (processError) reject(processError);
+        else if (code === 0) resolve();
+        else reject(new Error(exitSignal ? `安装已中断 (${exitSignal})` : `安装进程退出码 ${code}`));
+      });
     });
 
     if (spinner) spinner.text = `依赖安装完成 (${packageManager})`;
@@ -223,7 +240,7 @@ export async function installDependencies(
   } catch (error) {
     if (spinner) spinner.text = "依赖安装失败，请手动安装";
     console.log();
-    console.log(chalk.yellow("自动安装依赖失败"));
+    console.log(chalk.yellow(signal?.aborted ? "依赖安装已取消，项目文件已保留" : "自动安装依赖失败"));
     console.log(chalk.dim(`   错误: ${(error as Error).message}`));
     console.log();
     console.log(chalk.blue("请手动安装:"));
@@ -241,6 +258,9 @@ export function getPackageManagerVersion(
     return execSync(`${packageManager} --version`, {
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf8",
+      timeout: 5000,
+      cwd: os.tmpdir(),
+      env: { ...process.env, COREPACK_ENABLE_NETWORK: "0", COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
     }).trim();
   } catch {
     return null;
@@ -265,7 +285,7 @@ export async function generateProjectStats(
       const items = await fs.readdir(dir);
       for (const item of items) {
         const full = path.join(dir, item);
-        const stat = await fs.stat(full);
+        const stat = await fs.lstat(full);
         if (stat.isDirectory()) {
           if (!skip.has(item)) {
             stats.directories++;

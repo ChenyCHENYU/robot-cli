@@ -1,89 +1,40 @@
 # Robot CLI — 路线图
 
-> 最后更新: 2026-07-15
+最后更新：2026-11-12。当前版本为 3.3.0，已收敛 PC 与 H5 创建入口，并补齐生成、终端交互与安装包验收。
 
----
+## 当前已实现
 
-## 已上线 (v3.x)
+| 能力 | 当前边界 |
+| --- | --- |
+| 三步创建向导 | 选择项目与用途 → 设置产品与初始化方式 → 核对并创建；默认提供 PC 与 H5，其他架构放入更多入口 |
+| 自动化创建 | 支持 `--yes`、预设、标题、安装与 Git 参数；未知模板、冲突选项和已有目录明确报错 |
+| PC Full / Lite / Custom | 仅主分支；Lite 移除演示和可选展示，保留认证、布局、系统管理、国际化、共享工具及行业样例 |
+| 安全裁剪 | 使用语法结构处理相关入口，联动页面、菜单与剩余引用检查；遇到未知结构停止，避免输出损坏项目 |
+| 运行要求复验 | 创建前提示注册要求；下载后按 H5 manifest 或模板 `package.json` 校验实际 Node、包管理器与版本 |
+| 下载与缓存 | Git / HTTP 切源，body 与解压失败纳入回退；24 小时缓存、过期刷新、离线旧缓存提示、超时与下载取消 |
+| 真实创建结果 | Git main 分支与首次提交、依赖安装分别报告状态；安装失败保留文件，覆盖失败恢复原目录 |
+| 项目交接指引 | 生成 `ROBOT_PROJECT.md` 和 `.robot-cli/project.json`，保留模板 README 与 H5 自身初始化记录 |
+| CLI 检查 | lint、类型、单元与命令回归；CI 覆盖 Node 20/22/24，H5 有每周/手动安装构建冒烟 |
 
-| 能力 | 说明 |
-|------|------|
-| **4 个稳定模板 + 1 个 Beta** | Robot Admin、Monorepo、MicroApp、Module Federation；Robot H5 以 Beta 接入 |
-| **模板配置系统（v3.1 新增）** | Robot Admin 完整版支持 Full/Lite/Custom 三档配置，精准裁剪演示页面、可选功能和依赖 |
-| **git clone 下载引擎** | 使用 `git clone --depth=1`，与 create-vue/degit 同方案，自动继承系统代理，实时进度条 |
-| **Gitee 国内加速** | Gitee 优先克隆，GitHub 兜底，HTTP ZIP 二次兜底，三层容错 |
-| **@clack/prompts 现代交互** | 4 种模板选择方式（推荐/分类/搜索/全部），确认面板，美化输出 |
-| **离线缓存** | 首次下载自动缓存，网络断了也能用 |
-| **环境诊断 `robot doctor`** | 检测 Node/Git/包管理器/网络，一键排查 |
-| **coming-soon 防护** | 未上线的 8 个模板标记为"开发中"，选择时跳过，不会让用户踩坑 |
-| **CI** | GitHub Actions 自动检查 Node 20/22/24；npm 版本由维护者本地使用 Bun 发布 |
-| **模板契约** | 支持校验模板 manifest、Node/pnpm 约束，并无 shell 调用模板初始化器 |
-| **单元测试** | 覆盖校验、模板查询、下载、裁剪和模板运行时契约 |
+当前内置入口是 Robot Admin、Robot H5 Beta，以及 Robot Admin 的 Monorepo、MicroApp、Module Federation 分支。入口可创建与项目已完成生产验收是两件独立的事；具体构建和接入要求保留在模板文档及生成指引中。
 
----
+## 下一阶段：先完成生成产物闭环
 
-## 模板配置系统 (v3.1)
+1. **生成矩阵成为发版依据**：针对 PC Full/Lite/关键 Custom 组合，执行创建、冻结安装、类型检查和构建；高级分支独立验证。将真实模板变更与 CLI 兼容结果关联，减少仅靠夹具测试遗漏的漂移。
+2. **模板来源可复现**：记录不可变 commit/tag、实际下载源及验证结果；提供指定模板版本的能力。当前记录包含仓库、分支与模板包版本，还不能证明缓存、镜像与远端分支内容一致。
+3. **收敛运行与初始化契约**：逐步减少注册表、manifest、`package.json` 的重复要求，明确参数、默认值、初始化入口和校验命令。当前 H5 已使用 manifest，但 CLI 尚未消费它的全部参数，PC 也尚未全面采用同一协议。
+4. **H5 区分独立与企业集成预设**：在模板侧明确宿主模式、API、部署路径、分支策略和 Mock 设置。本轮只诚实展示现有 wl-mbase 配置及分支限制，没有改造 H5 本身。
 
-> **核心思路**：选择 Robot Admin 完整版时，CLI 自动提供 Full / Lite / Custom 三种配置模式，裁剪规则内置于 CLI，无需在模板项目中添加任何文件。
+## 移动端接入门槛
 
-### 三种模式
+H5 的浏览器、wl-mbase、App/PDA 场景分别记录能力提供者、SDK 就绪状态、配置要求及实际验证结果。浏览器降级或宿主识别不能代替真机能力验证；转 Stable 前需补齐生成产物、部署与宿主验收记录。
 
-| 模式 | 说明 |
-|------|------|
-| **完整版（Full）** | 保留全部功能，等同于直接 clone 主分支 |
-| **精简版（Lite）⭐** | 移除演示页面、仪表盘、i18n、统计、可选包、3D 背景等，保留核心业务框架 + 系统管理 |
-| **自定义（Custom）** | 用户逐项选择要保留的页面模块（4 项）、功能模块（3 项）、@robot-admin 可选包（4 项） |
+UniApp 继续按自身 Vue、Wot Design Uni、uni-app 路由和平台边界演进。重新接入 CLI 前，先补模板 manifest、初始化脚本、包管理器约束，以及应用名称/AppID、环境和版本同步的参数处理；再验证生成后的 H5、微信小程序和 App 资源构建。本轮没有注册 UniApp，也没有把 H5 与 UniApp 合成同一模板。
 
-### 可裁剪模块一览
+## 后续按实际需求评估
 
-| 分类 | 模块 | Lite 默认裁剪 |
-|------|------|:---:|
-| 页面模块 | 演示页面（56 个组件示例 + 预览系统） | ✅ |
-| 页面模块 | 仪表盘（ECharts 图表页面） | ✅ |
-| 页面模块 | 系统管理页面（用户/角色/权限/菜单/字典） | — |
-| 页面模块 | 外部页面 + 关于 | ✅ |
-| 功能模块 | 国际化（i18n 多语言支持） | ✅ |
-| 功能模块 | 登录页 3D 背景（Spline 动画） | ✅ |
-| 功能模块 | Vercel Analytics（线上统计） | ✅ |
-| 可选包 | @robot-admin/directives | ✅ |
-| 可选包 | @robot-admin/file-utils | ✅ |
-| 可选包 | @robot-admin/form-validate | ✅ |
-| 可选包 | @robot-admin/git-standards | ✅ |
+- 创建记录的诊断与迁移：基于来源和预设识别项目，先提供可审阅差异，再考虑升级能力。
+- 组织模板源：在来源版本、身份校验和生成验证具备基础后，再考虑私有注册表。
+- 子包或功能添加：以真实重复需求决定是否提供 `add` 能力，暂不先建设插件平台。
 
-> 无论选择何种模式，`vue-command-palette` 和 `motion-v`（零使用依赖）始终被自动清理。
-
----
-
-## 模板上线计划
-
-### 已上线
-
-| 模板 | 仓库 | 分支 |
-|------|------|------|
-| Robot Admin 完整版 | `Robot_Admin` | main |
-| Robot Monorepo | `Robot_Admin` | monorepo |
-| Robot MicroApp 微前端 | `Robot_Admin` | micro-app |
-| Robot Module Federation | `Robot_Admin` | module-federation |
-| Robot H5（Beta） | `Robot_H5` | main |
-
-### 待建仓
-
-| 模板 | 需要创建的仓库 | 优先级 |
-|------|---------------|--------|
-| Robot React 完整版/精简版 | `Robot_React` | 中 |
-| Robot NestJS 完整版/精简版 | `Robot_Nest` | 中 |
-| Robot Electron | `Robot_Electron` | 低 |
-| Robot NestJS 微服务 | `Robot_Nest_Micro` | 低 |
-
----
-
-## 远期方向 (v4.x)
-
-| 方向 | 说明 |
-|------|------|
-| **更多模板配置支持** | 将模板配置系统扩展到其他模板（Monorepo、MicroApp 等） |
-| **Robot H5 转 Stable** | 完成性能预算、CI、开源授权后进入首页推荐 |
-| **monorepo 子包脚手架** | `robot add auth-module` 在 monorepo 中快速添加新子包 |
-| **模板版本锁定** | `robot create my-app -t robot-admin@v2.0` 指定 tag |
-| **私有模板注册表** | 企业内部模板源 `robot registry add https://...` |
-| **插件系统** | `robot plugin add eslint-config` 一键注入配置 |
+React、NestJS、Electron 等仍只是注册表中的规划项；不承诺上线时间，不计入当前可用能力。默认列表和搜索隐藏这些规划，显式 `--all` 才展示。

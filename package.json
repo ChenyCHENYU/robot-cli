@@ -1,7 +1,7 @@
 {
   "name": "@agile-team/robot-cli",
-  "version": "3.2.0",
-  "description": "现代化项目脚手架工具，支持多技术栈快速创建项目 - 优先 bun，兼容 npm/pnpm/yarn",
+  "version": "3.3.0",
+  "description": "Robot 生态项目脚手架：创建 PC 管理后台与移动 H5，按模板运行约定初始化",
   "type": "module",
   "packageManager": "bun@1.3.14",
   "bin": {
@@ -13,6 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke:robot-h5": "bun scripts/smoke-robot-h5.ts",
+    "smoke:robot-admin": "bun scripts/smoke-robot-admin.ts",
+    "smoke:terminal": "bun run build && python3 scripts/smoke-terminal.py",
+    "test:package": "bun run build && node scripts/smoke-package.mjs",
     "lint": "oxlint src/ tests/ scripts/",
     "lint:fix": "oxlint --fix src/ tests/ scripts/",
     "typecheck": "tsc --noEmit",
@@ -27,6 +30,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.1.0",
+    "@vue/compiler-sfc": "^3.5.42",
     "chalk": "^5.3.0",
     "commander": "^11.0.0",
     "extract-zip": "^2.0.1",
@@ -54,12 +58,10 @@
     "scaffold",
     "template",
     "vue",
-    "react",
     "node",
     "h5",
     "vant",
     "webview",
-    "electron",
     "project-generator",
     "boilerplate",
     "bun-first",
@@ -67,7 +69,7 @@
     "cheny"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": "^20.12.0 || >=22.0.0"
   },
   "homepage": "https://github.com/ChenyCHENYU/robot-cli#readme",
   "repository": {

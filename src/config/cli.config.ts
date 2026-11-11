@@ -1,12 +1,11 @@
 // ── CLI Configuration ────────────────────────────────────────────
 // CLI 品牌、运行时配置独立管理，方便二次开发时快速定制
 
-/** 远程模板注册表 URL */
-export const REMOTE_REGISTRY_URL =
-  "https://raw.githubusercontent.com/ChenyCHENYU/robot-cli/main/registry.json";
-
 /** 模板缓存目录名（位于 ~/.robot-cli/ 下） */
 export const CACHE_DIR_NAME = "cache";
+
+/** Clack uses util.styleText, available from Node 20.12. */
+export const CLI_NODE_RANGE = "^20.12.0 || >=22.0.0";
 
 /** 版本标签映射 */
 export const VERSION_LABELS: Record<string, string> = {
@@ -15,13 +14,8 @@ export const VERSION_LABELS: Record<string, string> = {
   micro: "微服务版",
 };
 
-/** 推荐模板 key 列表（仅包含已上线的模板） */
-export const RECOMMENDED_TEMPLATE_KEYS = [
-  "robot-admin",
-  "robot-monorepo",
-  "robot-micro-app",
-  "robot-module-federation",
-];
+/** 默认推荐维护中的 PC 单体；高级架构由用户按需选择。 */
+export const RECOMMENDED_TEMPLATE_KEYS = ["robot-admin"];
 
 /** 模板 key → 启动脚本名 映射 */
 export const START_COMMAND_MAP: Record<string, string> = {

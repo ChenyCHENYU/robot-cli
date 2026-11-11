@@ -2,6 +2,21 @@ name: Template Smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+      - "scripts/smoke-robot-*.ts"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/template-smoke.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "scripts/smoke-robot-*.ts"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/template-smoke.yml"
   schedule:
     - cron: "17 2 * * 1"
 
@@ -13,6 +28,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  robot-admin:
+    name: Robot Admin / ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [full, lite]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install CLI dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Fresh install, type-check and build PC template
+        run: bun scripts/smoke-robot-admin.ts --preset ${{ matrix.preset }} --report "${{ runner.temp }}/robot-admin-${{ matrix.preset }}.json"
+
+      - name: Record template provenance and results
+        if: always()
+        env:
+          SMOKE_REPORT: ${{ runner.temp }}/robot-admin-${{ matrix.preset }}.json
+        run: |
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, appendFileSync } from 'node:fs';
+          const report = process.env.SMOKE_REPORT;
+          if (existsSync(report)) {
+            const data = readFileSync(report, 'utf8');
+            console.log(data);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Robot Admin smoke\n\n\`\`\`json\n${data}\n\`\`\`\n`);
+          }
+          NODE
+
   robot-h5:
     runs-on: ubuntu-latest
     timeout-minutes: 15

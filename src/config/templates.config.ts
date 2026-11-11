@@ -29,6 +29,11 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                   "性能优化等等",
                 ],
                 version: "full",
+                runtime: {
+                  node: ">=22.18.0",
+                  packageManager: "bun",
+                  packageManagerVersion: ">=1.4.2",
+                },
               },
               "robot-admin-base": {
                 name: "Robot Admin 精简版",
@@ -44,6 +49,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
             name: "Monorepo 架构",
             templates: {
               "robot-monorepo": {
+                advanced: true,
                 name: "Robot Monorepo",
                 description: "bun workspace + Monorepo 多包管理架构",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
@@ -58,6 +64,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
             name: "微前端架构",
             templates: {
               "robot-micro-app": {
+                advanced: true,
                 name: "Robot MicroApp 微前端",
                 description: "基于 MicroApp 的微前端架构方案",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
@@ -67,6 +74,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                 version: "full",
               },
               "robot-module-federation": {
+                advanced: true,
                 name: "Robot Module Federation 模块联邦",
                 description: "基于 Vite Module Federation 的模块联邦方案",
                 repoUrl: "https://github.com/ChenyCHENYU/Robot_Admin",
@@ -131,7 +139,7 @@ export const TEMPLATE_CATEGORIES: TemplateCategories = {
                 version: "full",
                 status: "beta",
                 runtime: {
-                  node: "^22.12.0 || ^24.0.0",
+                  node: "^22.13.0 || ^24.0.0",
                   packageManager: "pnpm",
                   packageManagerVersion: "^11.8.0",
                 },

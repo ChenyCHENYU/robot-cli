@@ -38,6 +38,8 @@ export interface TemplateConfig {
   runtime?: TemplateRuntimeConfig;
   initializer?: TemplateInitializerConfig;
   startScript?: string;
+  /** Kept behind the advanced architecture picker. */
+  advanced?: boolean;
 }
 
 export interface TemplateManifest {
@@ -84,6 +86,8 @@ export interface ProjectConfig {
   packageManager: PackageManager;
   description: string;
   author: string;
+  /** Product title, independent from the package description. */
+  title?: string;
 }
 
 export interface CreateOptions {
@@ -92,6 +96,14 @@ export interface CreateOptions {
   dryRun?: boolean;
   from?: string;
   noCache?: boolean;
+  yes?: boolean;
+  preset?: "full" | "lite" | "custom";
+  packageManager?: PackageManager;
+  title?: string;
+  description?: string;
+  author?: string;
+  git?: boolean;
+  advanced?: boolean;
 }
 
 export interface ProjectStats {
@@ -105,12 +117,18 @@ export interface DownloadOptions {
   spinner?: Ora;
   noCache?: boolean;
   giteeUrl?: string;
+  signal?: AbortSignal;
 }
 
 export interface DownloadedTemplate {
   path: string;
   /** Only paths owned by the current process may be cleaned up. Cache paths omit this. */
   cleanupPath?: string;
+  source?: string;
+  fromCache?: boolean;
+  cachedAt?: string;
+  /** Resolved Git commit when the download transport can verify it. */
+  revision?: string;
 }
 
 // ── Cache ────────────────────────────────────────────────────────
@@ -119,6 +137,8 @@ export interface CacheEntry {
   downloadedAt: string;
   branch: string;
   size: number;
+  source?: string;
+  revision?: string;
 }
 
 export interface CacheIndex {

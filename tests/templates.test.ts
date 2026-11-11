@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getAllTemplates,
+  getAvailableTemplates,
   searchTemplates,
   getRecommendedTemplates,
 } from "../src/templates";
@@ -41,8 +42,9 @@ describe("searchTemplates", () => {
   });
 
   it("should find templates by feature keyword", () => {
-    const results = searchTemplates("JWT");
-    expect(Object.keys(results).length).toBeGreaterThan(0);
+    const results = searchTemplates("JWT", { includePlanned: true });
+    expect(results).toHaveProperty("robot-nest");
+    expect(searchTemplates("JWT")).toEqual({});
   });
 
   it("should return empty for non-matching keyword", () => {
@@ -59,6 +61,20 @@ describe("searchTemplates", () => {
     const lower = searchTemplates("vue");
     const upper = searchTemplates("VUE");
     expect(Object.keys(lower)).toEqual(Object.keys(upper));
+  });
+
+  it("matches the template identifier and ignores empty input", () => {
+    expect(searchTemplates(" robot-h5 ")).toHaveProperty("robot-h5");
+    expect(searchTemplates("   ")).toEqual({});
+  });
+});
+
+describe("getAvailableTemplates", () => {
+  it("excludes planned entries while keeping beta templates", () => {
+    const available = getAvailableTemplates();
+    expect(available).toHaveProperty("robot-admin");
+    expect(available).toHaveProperty("robot-h5");
+    expect(Object.values(available).every(template => template.status !== "coming-soon")).toBe(true);
   });
 });
 
@@ -82,5 +98,9 @@ describe("getRecommendedTemplates", () => {
 
   it("should not recommend beta templates", () => {
     expect(getRecommendedTemplates()).not.toHaveProperty("robot-h5");
+  });
+
+  it("recommends the maintained PC starting point without padding", () => {
+    expect(Object.keys(getRecommendedTemplates())).toEqual(["robot-admin"]);
   });
 });

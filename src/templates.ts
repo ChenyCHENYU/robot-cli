@@ -4,31 +4,10 @@ import type {
 } from "./types";
 import {
   TEMPLATE_CATEGORIES,
-  REMOTE_REGISTRY_URL,
   RECOMMENDED_TEMPLATE_KEYS,
 } from "./config";
 
 export { TEMPLATE_CATEGORIES };
-
-// ── Remote Registry ──────────────────────────────────────────────
-
-let remoteTemplates: Record<string, TemplateConfig> | null = null;
-
-export async function loadRemoteRegistry(): Promise<void> {
-  try {
-    const response = await fetch(REMOTE_REGISTRY_URL, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (response.ok) {
-      remoteTemplates = (await response.json()) as Record<
-        string,
-        TemplateConfig
-      >;
-    }
-  } catch {
-    // Silently fall back to built-in templates
-  }
-}
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -43,16 +22,14 @@ export function getAllTemplates(): Record<string, TemplateConfig> {
     }
   }
 
-  // Merge remote templates (built-in takes precedence)
-  if (remoteTemplates) {
-    for (const [key, template] of Object.entries(remoteTemplates)) {
-      if (!templates[key]) {
-        templates[key] = template;
-      }
-    }
-  }
-
   return templates;
+}
+
+/** Only templates that can actually be created belong in the default catalogue. */
+export function getAvailableTemplates(): Record<string, TemplateConfig> {
+  return Object.fromEntries(
+    Object.entries(getAllTemplates()).filter(([, template]) => template.status !== "coming-soon"),
+  );
 }
 
 export function getTemplatesByCategory(
@@ -71,14 +48,16 @@ export function getTemplatesByCategory(
 
 export function searchTemplates(
   keyword: string,
+  options: { includePlanned?: boolean } = {},
 ): Record<string, TemplateConfig> {
-  const all = getAllTemplates();
+  const all = options.includePlanned ? getAllTemplates() : getAvailableTemplates();
   const results: Record<string, TemplateConfig> = {};
-  const lower = keyword.toLowerCase();
+  const lower = keyword.trim().toLowerCase();
+  if (!lower) return results;
 
   for (const [key, t] of Object.entries(all)) {
     const haystack =
-      `${t.name} ${t.description} ${t.features.join(" ")}`.toLowerCase();
+      `${key} ${t.name} ${t.description} ${t.features.join(" ")}`.toLowerCase();
     if (haystack.includes(lower)) {
       results[key] = t;
     }
@@ -92,20 +71,7 @@ export function getRecommendedTemplates(): Record<string, TemplateConfig> {
   const keys = RECOMMENDED_TEMPLATE_KEYS;
 
   for (const key of keys) {
-    if (all[key] && !all[key].status) recommended[key] = all[key];
-  }
-
-  // Pad to at least 4 if not enough
-  if (Object.keys(recommended).length < 4) {
-    for (const key of Object.keys(all)) {
-      if (
-        !all[key].status &&
-        !recommended[key] &&
-        Object.keys(recommended).length < 6
-      ) {
-        recommended[key] = all[key];
-      }
-    }
+    if (all[key] && !all[key].status && !all[key].advanced) recommended[key] = all[key];
   }
 
   return recommended;

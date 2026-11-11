@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.3.0] - 2026-11-12
+
+### Added
+
+- 创建流程统一为选择项目与用途、产品与初始化设置、核对并创建三步；默认提供 PC 与 H5，保留更多架构入口
+- 增加 `--yes`、`--preset`、`--title`、`--description`、`--author`、`--package-manager`、`--no-git`、`--advanced`，支持明确的非交互创建与预览
+- 生成 `ROBOT_PROJECT.md` 与 `.robot-cli/project.json`，记录模板来源、分支、包版本、预设、运行要求和缓存来源，提供实际模板的接入与检查指引
+- 增加命令回归、运行契约变化、下载超时与取消、缓存刷新及裁剪结构变化等测试
+- 增加 PC Full/Lite 与 H5 的独立安装构建冒烟、真实终端回归和 npm 安装包的生产依赖验收
+
+### Changed
+
+- 精简模板选择层级；默认列表与搜索只展示可用模板，规划项需显式 `--all`，移除按使用频率推荐的表述
+- PC Lite 保留国际化、共享工具、核心业务框架及行业样例，只裁剪可安全移除的演示页面与展示功能；Custom 使用可取消全部选项的多选交互
+- 裁剪按语法结构同步入口与菜单，检查剩余引用后再移除依赖；未知结构停止并给出可恢复的选择
+- PC main 显式声明 Node.js ≥22.18.0、Bun ≥1.4.2；下载后根据 manifest 或 `package.json` 复验实际运行要求，缺少合适包管理器时保留文件与安装指引
+- 模板缓存改为 24 小时有效，过期后先联网刷新，下载失败可提示使用旧缓存；创建记录包含下载来源与缓存时间
+- 完成页分别报告 Git 提交与依赖安装结果，并提示正式接口、宿主与部署尚需验证；保留模板 README，新增独立启动指引
+- README 和路线图按当前行为重写，区分已实现能力、生成产物验收和后续方向；本轮没有注册 UniApp 或改造 H5 企业集成环境
+
+### Fixed
+
+- H5 Node 契约按实际版本兼容性检查，不再因 CLI 与 manifest 的范围字符串不同而阻断创建；最终安装要求尊重下载后的模板声明
+- HTTP body、ZIP 内容、解压或项目根目录验证失败时继续切换下载源，兼容 GitHub API 使用 commit hash 的 ZIP 根目录
+- Git 克隆与 HTTP 下载增加有界超时、取消与临时数据清理，保留 Git 错误详情；移除不存在的 `robot cache clear` 指引
+- 非交互模式缺少参数、未知模板或冲突选项立即报错；`--yes` 不覆盖已有目录，Git 初始化明确使用 main 分支
+- 项目标题与描述分开维护；PC 更新应用标题，H5 将标题传给模板初始化器
+- 启动与检查指引只使用实际存在的脚本，Git 下载记录真实 commit；覆盖安装失败保留新项目和旧目录备份
+- 包管理器探测不受 CLI 自身包配置影响，Bun 执行时按真实 Node 二进制校验版本；CLI 最低环境校正为 Node 20.12+（20.x）或 22+
+- 防止目录并发创建被合并或误删，校验复制时的符号链接边界，初始化器取消时终止其子进程
+
 ## [3.2.0] - 2026-07-16
 
 ### Added

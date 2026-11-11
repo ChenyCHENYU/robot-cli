@@ -50,6 +50,14 @@ jobs:
       - name: Test
         run: bun run test
 
+      - name: Test interactive terminal flows
+        if: matrix.node-version == 24
+        run: python3 scripts/smoke-terminal.py
+
+      - name: Verify packed production installation
+        if: matrix.node-version == 24
+        run: node scripts/smoke-package.mjs
+
       - name: Smoke test with Node.js ${{ matrix.node-version }}
         run: |
           node bin/robot.js --version

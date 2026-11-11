@@ -1,960 +1,372 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import chalk from "chalk";
 import * as p from "@clack/prompts";
 import ora from "ora";
-import { execFileSync } from "node:child_process";
 import { downloadTemplate } from "./download";
+import { getAllTemplates } from "./templates";
 import {
-  TEMPLATE_CATEGORIES,
-  getAllTemplates,
-  getTemplatesByCategory,
-  searchTemplates,
-  getRecommendedTemplates,
-} from "./templates";
-import { START_COMMAND_MAP, VERSION_LABELS } from "./config";
-import {
-  validateProjectName,
-  copyTemplate,
-  installDependencies,
-  generateProjectStats,
-  printProjectStats,
-  detectPackageManager,
-  getPackageManagerVersion,
-  getGitUser,
+  validateProjectName, copyTemplate, installDependencies,
+  detectPackageManager, getPackageManagerVersion, getGitUser,
 } from "./utils";
-import type { SelectedTemplate, ProjectConfig, CreateOptions } from "./types";
+import type {
+  SelectedTemplate, TemplateConfig, ProjectConfig, CreateOptions,
+  DownloadedTemplate, PackageManager,
+} from "./types";
 import {
-  isTrimmableTemplate,
-  selectTrimMode,
-  executeTrimming,
-  getTrimSummary,
-  type TrimSelection,
+  isTrimmableTemplate, selectTrimMode, getPresetSelection,
+  executeTrimming, getTrimSummary, type TrimSelection,
 } from "./trimmer";
 import {
-  assertTemplateRuntime,
-  getRequiredPackageManager,
-  isVersionSupported,
-  runTemplateInitializer,
+  assertTemplateRuntime, getRequiredPackageManager, isVersionSupported,
+  resolveDownloadedTemplateRuntime, runTemplateInitializer,
 } from "./template-runtime";
+import { getProjectGuidance, getProjectStartCommand, writeProjectGuide } from "./project-guide";
+import { CreationCancelled } from "./interaction";
 
-// ── Helpers ──────────────────────────────────────────────────────
-
-const STRIP_VERSION_RE = /\s*(完整版|精简版|微服务版)\s*$/;
-
-function betaSuffix(status?: string): string {
-  return status === "beta" ? " [Beta]" : "";
+function answer<T>(value: T | symbol): T {
+  if (p.isCancel(value)) throw new CreationCancelled();
+  return value as T;
 }
 
-/** 过滤掉尚未发布（status: "coming-soon"）的模板 */
-function filterAvailable<T extends { status?: string }>(
-  map: Record<string, T>,
-): Record<string, T> {
-  return Object.fromEntries(
-    Object.entries(map).filter(([, t]) => t.status !== "coming-soon"),
-  );
+function step(number: number, title: string): void {
+  p.log.step(`${chalk.cyan(`${number}/3`)} ${chalk.bold(title)}`);
 }
 
-// ── Main Entry ───────────────────────────────────────────────────
-
+/** A single creation path for both the wizard and automation. */
 export async function createProject(
   projectName: string | undefined,
   options: CreateOptions = {},
-): Promise<void> {
-  p.intro(chalk.bgCyan.black(" Robot CLI - 开始创建项目 "));
-
-  // 1. Select template
-  let template: SelectedTemplate;
-
-  if (options.from) {
-    // Custom template source via --from
-    template = {
-      key: "custom",
-      name: "Custom Template",
-      description: `来自 ${options.from}`,
-      repoUrl: options.from,
-      features: [],
-      version: "full",
-    };
-    console.log(chalk.blue(`使用自定义模板: ${chalk.dim(options.from)}`));
-    console.log();
-  } else {
-    template = await selectTemplate(options.template);
+): Promise<boolean> {
+  if (options.from && options.template) {
+    throw new Error("--from 与 --template 只能选择一个。内置模板用 -t，自定义仓库用 --from。");
   }
-
-  if (template.status === "beta") {
-    p.log.warn(`${template.name} 当前为 Beta 模板，请先在测试项目中验证后再用于生产。`);
+  if (!options.yes && (!process.stdin.isTTY || !process.stdout.isTTY)) {
+    throw new Error("当前终端无法交互。请加 --yes 使用默认设置，例如：robot create my-app -t robot-admin --yes --skip-install");
   }
-  assertTemplateRuntime(template);
-
-  // 2. Handle project name
-  const finalProjectName = await handleProjectName(projectName, template);
-
-  // 3. Template configuration (trimming) — only for robot-admin main branch
-  let trimSelection: TrimSelection | undefined;
-  if (isTrimmableTemplate(template)) {
-    trimSelection = await selectTrimMode();
+  if (options.yes && !projectName?.trim()) {
+    throw new Error("使用 --yes 时请提供项目目录，例如：robot create my-app --yes。");
   }
-
-  // 4. Project configuration
-  const projectConfig = await configureProject(options, template);
-
-  // 5. Confirm creation
-  await confirmCreation(
-    finalProjectName,
-    template,
-    projectConfig,
-    trimSelection,
-  );
-
-  // 6. Dry-run mode
-  if (options.dryRun) {
-    console.log();
-    console.log(
-      chalk.yellow("Dry Run 模式 - 以下为预览信息，未实际执行任何操作:"),
-    );
-    console.log();
-    console.log(`  项目路径: ${chalk.cyan(path.resolve(finalProjectName))}`);
-    console.log(`  下载来源: ${chalk.dim(template.repoUrl)}`);
-    if (trimSelection) {
-      console.log(`  模板配置: ${chalk.cyan(getTrimSummary(trimSelection))}`);
-    }
-    console.log("  执行步骤:");
-    let step = 1;
-    console.log(chalk.dim(`    ${step++}. 从 ${template.repoUrl} 下载最新模板`));
-    console.log(chalk.dim(`    ${step++}. 解压并复制到 ./${finalProjectName}`));
-    if (trimSelection && trimSelection.mode !== "full") {
-      console.log(
-        chalk.dim(`    ${step++}. 执行模板裁剪 (${getTrimSummary(trimSelection)})`),
-      );
-    }
-    console.log(
-      chalk.dim(
-        `    ${step++}. 更新 package.json (name, description, author)`,
-      ),
-    );
-    if (template.initializer) {
-      console.log(chalk.dim(`    ${step++}. 校验模板契约并执行模板初始化`));
-    }
-    if (projectConfig.initGit) {
-      console.log(chalk.dim(`    ${step++}. 初始化 Git 仓库并提交初始代码`));
-    }
-    if (projectConfig.installDeps) {
-      console.log(
-        chalk.dim(`    ${step++}. 使用 ${projectConfig.packageManager} 安装依赖`),
-      );
-    }
-    console.log();
-    console.log(chalk.dim("移除 --dry-run 参数以执行创建。"));
-    console.log();
-    return;
+  if (options.yes && options.preset === "custom") {
+    throw new Error("自定义预设需要交互选择功能。请移除 --yes，或改用 --preset lite / full。");
   }
-
-  // 7. Execute creation
-  await executeCreation(
-    finalProjectName,
-    template,
-    projectConfig,
-    options,
-    trimSelection,
-  );
-}
-
-// ── Project Name ─────────────────────────────────────────────────
-
-async function handleProjectName(
-  projectName: string | undefined,
-  template: SelectedTemplate,
-): Promise<string> {
-  if (projectName) {
-    const v = validateProjectName(projectName);
-    if (!v.valid) {
-      p.log.error("项目名称不合法:");
-      v.errors.forEach((e) => p.log.warn(`  ${e}`));
-
-      const newName = await p.text({
-        message: "请输入新的项目名称:",
-        validate: (input) => {
-          if (!input) return "项目名称不能为空";
-          const r = validateProjectName(input);
-          return r.valid ? undefined : r.errors[0];
-        },
-      });
-      if (p.isCancel(newName)) process.exit(0);
-      return newName.trim();
-    }
-    return projectName.trim();
-  }
-
-  const defaultName = generateDefaultProjectName(template);
-
-  const name = await p.text({
-    message: "请输入项目名称:",
-    defaultValue: defaultName,
-    placeholder: defaultName,
-    validate: (input) => {
-      if (!input?.trim()) return "项目名称不能为空";
-      const r = validateProjectName(input);
-      return r.valid ? undefined : r.errors[0];
-    },
-  });
-
-  if (p.isCancel(name)) process.exit(0);
-  return name.trim();
-}
-
-function generateDefaultProjectName(template: SelectedTemplate): string {
-  const key = template.key || "project";
-  const ts = Date.now().toString().slice(-4);
-  const base = key.replace(/-(full|lite|base)$/, "");
-  return `my-${base}-${ts}`;
-}
-
-// ── Template Selection ───────────────────────────────────────────
-
-async function selectTemplate(
-  templateOption?: string,
-): Promise<SelectedTemplate> {
-  if (templateOption) {
-    const all = getAllTemplates();
-    if (all[templateOption]?.status !== "coming-soon") {
-      return { key: templateOption, ...all[templateOption] };
-    }
-    const reason = all[templateOption] ? "尚未上线" : "不存在";
-    console.log(chalk.yellow(`模板 "${templateOption}" ${reason}`));
-    console.log();
-  }
-  return await selectTemplateMethod();
-}
-
-async function selectTemplateMethod(): Promise<SelectedTemplate> {
-  const selectionMode = await p.select({
-    message: "模板选择方式:",
-    options: [
-      {
-        value: "recommended",
-        label: "推荐模板",
-        hint: "基于团队使用频率推荐的热门模板",
-      },
-      {
-        value: "category",
-        label: "分类浏览",
-        hint: "前端、后端、移动端、桌面端分类",
-      },
-      { value: "search", label: "关键词搜索", hint: "按技术栈、功能特性查找" },
-      { value: "all", label: "全部模板", hint: "查看所有可用模板" },
-    ],
-  });
-
-  if (p.isCancel(selectionMode)) process.exit(0);
-
-  switch (selectionMode) {
-    case "recommended":
-      return await selectFromRecommended();
-    case "category":
-      return await selectByCategory();
-    case "search":
-      return await selectBySearch();
-    case "all":
-      return await selectFromAll();
-    default:
-      return await selectByCategory();
-  }
-}
-
-// ── Recommended ──────────────────────────────────────────────────
-
-async function selectFromRecommended(): Promise<SelectedTemplate> {
-  const recommended = getRecommendedTemplates();
-
-  if (Object.keys(recommended).length === 0) {
-    p.log.warn("暂无推荐模板");
-    return await selectTemplateMethod();
-  }
-
-  p.log.info(
-    chalk.bold("推荐模板") + chalk.dim(" — 基于团队使用频率和项目成熟度推荐"),
-  );
-
-  const options: { value: string; label: string; hint?: string }[] = [];
-
-  for (const [key, template] of Object.entries(recommended)) {
-    if (template.status === "coming-soon") continue;
-    const ver = VERSION_LABELS[template.version] || template.version;
-    const tags = template.features.slice(0, 3).join(", ");
-    options.push({
-      value: key,
-      label: `${template.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(template.status)}`,
-      hint: `${template.description} | ${tags}`,
-    });
-  }
-
-  options.push({ value: "back", label: "<- 返回选择其他方式" });
-
-  const selected = await p.select({
-    message: "选择推荐模板:",
-    options,
-  });
-
-  if (p.isCancel(selected)) process.exit(0);
-  if (selected === "back") return await selectTemplateMethod();
-
-  const t = recommended[selected];
-  return { key: selected, ...t };
-}
-
-// ── Category selection ───────────────────────────────────────────
-
-async function selectByCategory(): Promise<SelectedTemplate> {
-  while (true) {
-    // Step 1: Select category
-    const catOptions = Object.entries(TEMPLATE_CATEGORIES).map(([key, c]) => ({
-      value: key,
-      label: c.name,
-    }));
-    catOptions.push({ value: "back_to_method", label: "<- 返回模板选择方式" });
-
-    const catKey = await p.select({
-      message: "请选择项目类型:",
-      options: catOptions,
-    });
-
-    if (p.isCancel(catKey)) process.exit(0);
-    if (catKey === "back_to_method") return await selectTemplateMethod();
-
-    const category = TEMPLATE_CATEGORIES[catKey];
-
-    // Step 2: Select stack (auto-select if only one)
-    const stackEntries = Object.entries(category.stacks);
-    let stackKey: string;
-
-    if (stackEntries.length === 1) {
-      stackKey = stackEntries[0][0];
-    } else {
-      const stackOptions = stackEntries.map(([key, s]) => ({
-        value: key,
-        label: s.name,
-      }));
-      stackOptions.push({ value: "back", label: "<- 返回" });
-
-      const sk = await p.select({
-        message: "请选择技术栈:",
-        options: stackOptions,
-      });
-
-      if (p.isCancel(sk)) process.exit(0);
-      if (sk === "back") continue;
-      stackKey = sk;
-    }
-
-    const stack = category.stacks[stackKey];
-
-    // Step 3: Select pattern (auto-select if only one)
-    const patternEntries = Object.entries(stack.patterns);
-    let patternKey: string;
-
-    if (patternEntries.length === 1) {
-      patternKey = patternEntries[0][0];
-    } else {
-      const patternOptions = patternEntries.map(([key, pt]) => ({
-        value: key,
-        label: pt.name,
-      }));
-      patternOptions.push({ value: "back", label: "<- 返回" });
-
-      const pk = await p.select({
-        message: "请选择架构模式:",
-        options: patternOptions,
-      });
-
-      if (p.isCancel(pk)) process.exit(0);
-      if (pk === "back") continue;
-      patternKey = pk;
-    }
-
-    // Step 4: Select template
-    const allTemplates = getTemplatesByCategory(catKey, stackKey, patternKey);
-    const templates = filterAvailable(allTemplates);
-    const comingSoonCount =
-      Object.keys(allTemplates).length - Object.keys(templates).length;
-
-    if (Object.keys(templates).length === 0) {
-      const names = Object.values(allTemplates)
-        .map((t) => t.name)
-        .join("、");
-      p.log.warn(`该分类下的模板正在建设中，敬请期待 (${names})`);
-      await new Promise((r) => setTimeout(r, 600));
-      continue;
-    }
-
-    const tplOptions = Object.entries(templates).map(([key, t]) => {
-      const ver = VERSION_LABELS[t.version] || t.version;
-      return {
-        value: key,
-        label: `${t.name} [${ver}]${betaSuffix(t.status)}`,
-        hint: t.description,
-      };
-    });
-    if (comingSoonCount > 0) {
-      tplOptions.push({
-        value: "__coming_soon__",
-        label: chalk.dim(`+ ${comingSoonCount} 个模板开发中...`),
-        hint: "敬请期待",
-      });
-    }
-    tplOptions.push({ value: "back", label: "<- 返回", hint: "" });
-
-    const tplKey = await p.select({
-      message: "请选择模板版本:",
-      options: tplOptions,
-    });
-
-    if (p.isCancel(tplKey)) process.exit(0);
-    if (tplKey === "back") continue;
-    if (tplKey === "__coming_soon__") {
-      p.log.warn("该模板正在开发中，敬请期待！");
-      await new Promise((r) => setTimeout(r, 600));
-      continue;
-    }
-
-    const t = templates[tplKey];
-    return { key: tplKey, ...t };
-  }
-}
-
-// ── Search selection ─────────────────────────────────────────────
-
-async function selectBySearch(): Promise<SelectedTemplate> {
-  while (true) {
-    const keyword = await p.text({
-      message: "请输入搜索关键词 (名称、描述、技术栈):",
-      validate: (input) => (input?.trim() ? undefined : "关键词不能为空"),
-    });
-
-    if (p.isCancel(keyword)) return await selectTemplateMethod();
-
-    const results = searchTemplates(keyword);
-    const availableResults = filterAvailable(results);
-
-    if (Object.keys(availableResults).length === 0) {
-      p.log.warn(`没有找到匹配的模板 (关键词: "${keyword}")`);
-
-      const action = await p.select({
-        message: "请选择下一步操作:",
-        options: [
-          { value: "retry", label: "重新搜索" },
-          { value: "back", label: "<- 返回模板选择方式" },
-        ],
-      });
-
-      if (p.isCancel(action) || action === "back")
-        return await selectTemplateMethod();
-      continue;
-    }
-
-    p.log.info(
-      `关键词: "${keyword}" -- 找到 ${Object.keys(availableResults).length} 个匹配模板`,
-    );
-
-    const options: { value: string; label: string; hint?: string }[] = [];
-
-    for (const [key, t] of Object.entries(availableResults)) {
-      const ver = VERSION_LABELS[t.version] || t.version;
-      const info = t.features.slice(0, 3).join(", ");
-      options.push({
-        value: key,
-        label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(t.status)}`,
-        hint: `${t.description} | ${info}`,
-      });
-    }
-
-    options.push(
-      { value: "search_again", label: "重新搜索" },
-      { value: "back_to_mode", label: "<- 返回模板选择方式" },
-    );
-
-    const selected = await p.select({
-      message: "选择模板:",
-      options,
-    });
-
-    if (p.isCancel(selected)) process.exit(0);
-    if (selected === "search_again") continue;
-    if (selected === "back_to_mode") return await selectTemplateMethod();
-
-    const t = availableResults[selected];
-    return { key: selected, ...t };
-  }
-}
-
-// ── All templates ────────────────────────────────────────────────
-
-async function selectFromAll(): Promise<SelectedTemplate> {
-  const allTemplates = getAllTemplates();
-  const availableTemplates = filterAvailable(allTemplates);
-  const comingSoonCount =
-    Object.keys(allTemplates).length - Object.keys(availableTemplates).length;
-
-  const countInfo =
-    comingSoonCount > 0
-      ? chalk.dim(
-          ` -- 共 ${Object.keys(availableTemplates).length} 个可用，${comingSoonCount} 个开发中`,
-        )
-      : chalk.dim(
-          ` -- 共 ${Object.keys(availableTemplates).length} 个模板可选`,
-        );
-  p.log.info(chalk.bold("所有可用模板") + countInfo);
-
-  const options: { value: string; label: string; hint?: string }[] = [];
-
-  for (const [_catKey, category] of Object.entries(TEMPLATE_CATEGORIES)) {
-    for (const [_sKey, stack] of Object.entries(category.stacks)) {
-      for (const _pattern of Object.values(stack.patterns)) {
-        for (const [key, t] of Object.entries(_pattern.templates)) {
-          if (t.status === "coming-soon") continue;
-          const ver = VERSION_LABELS[t.version] || t.version;
-          options.push({
-            value: key,
-            label: `${t.name.replace(STRIP_VERSION_RE, "")} [${ver}]${betaSuffix(t.status)}`,
-            hint: `${category.name} > ${stack.name} | ${t.description}`,
-          });
-        }
-      }
-    }
-  }
-
-  options.push({ value: "back_to_mode", label: "<- 返回模板选择方式" });
-
-  const selected = await p.select({
-    message: "选择模板:",
-    options,
-  });
-
-  if (p.isCancel(selected)) process.exit(0);
-  if (selected === "back_to_mode") return await selectTemplateMethod();
-
-  const t = availableTemplates[selected];
-  return { key: selected, ...t };
-}
-
-// ── Project Configuration ─────────────────────────────────────────
-
-async function configureProject(
-  options: CreateOptions,
-  template: SelectedTemplate,
-): Promise<ProjectConfig> {
-  p.log.step(chalk.bold("项目配置"));
-
-  const available = detectPackageManager();
-  const hasBun = available.includes("bun");
-  const hasPnpm = available.includes("pnpm");
-  const requiredManager = getRequiredPackageManager(template);
-
-  if (requiredManager) {
-    const version = template.runtime?.packageManagerVersion;
-    p.log.info(
-      `${template.name} 要求使用 ${requiredManager}${version ? ` ${version}` : ""}`,
-    );
-  }
-
-  const initGit = await p.confirm({
-    message: "是否初始化 Git 仓库?",
-    initialValue: true,
-  });
-  if (p.isCancel(initGit)) process.exit(0);
-
-  let installDeps = false;
-  if (options.skipInstall) {
-    p.log.info("已通过 --skip-install 跳过依赖安装");
-  } else {
-    const shouldInstall = await p.confirm({
-      message: "是否立即安装依赖?",
-      initialValue: true,
-    });
-    if (p.isCancel(shouldInstall)) process.exit(0);
-    installDeps = shouldInstall;
-  }
-
-  let packageManager: ProjectConfig["packageManager"] =
-    requiredManager || (hasBun ? "bun" : hasPnpm ? "pnpm" : "npm");
-
-  if (installDeps) {
-    if (requiredManager) {
-      const installedVersion = available.includes(requiredManager)
-        ? getPackageManagerVersion(requiredManager)
-        : null;
-      const requiredVersion = template.runtime?.packageManagerVersion;
-
-      if (!installedVersion) {
-        p.log.warn(
-          `未检测到模板要求的 ${requiredManager}，已跳过自动安装。项目创建后请先安装它。`,
-        );
-        installDeps = false;
-      } else if (
-        requiredVersion &&
-        !isVersionSupported(installedVersion, requiredVersion)
-      ) {
-        p.log.warn(
-          `${requiredManager} ${installedVersion} 不满足 ${requiredVersion}，已跳过自动安装。`,
-        );
-        installDeps = false;
-      } else {
-        p.log.success(`将使用 ${requiredManager} ${installedVersion} 安装依赖`);
-      }
-    } else {
-      const managerOptions: { value: string; label: string; hint?: string }[] =
-        [];
-      if (available.includes("bun"))
-        managerOptions.push({
-          value: "bun",
-          label: "bun",
-          hint: "推荐 - 极速安装",
-        });
-      if (available.includes("pnpm"))
-        managerOptions.push({
-          value: "pnpm",
-          label: "pnpm",
-          hint: "推荐 - 节省磁盘空间",
-        });
-      if (available.includes("yarn"))
-        managerOptions.push({
-          value: "yarn",
-          label: "yarn",
-          hint: "兼容性好",
-        });
-      if (available.includes("npm"))
-        managerOptions.push({
-          value: "npm",
-          label: "npm",
-          hint: "Node.js 内置",
-        });
-
-      if (managerOptions.length === 0) {
-        managerOptions.push(
-          { value: "npm", label: "npm" },
-          { value: "bun", label: "bun" },
-          { value: "pnpm", label: "pnpm" },
-          { value: "yarn", label: "yarn" },
-        );
-      }
-
-      const pm = await p.select({
-        message: "选择包管理器:",
-        options: managerOptions,
-        initialValue: hasBun ? "bun" : hasPnpm ? "pnpm" : "npm",
-      });
-      if (p.isCancel(pm)) process.exit(0);
-      packageManager = pm as ProjectConfig["packageManager"];
-    }
-  }
-
-  const description = await p.text({
-    message: "项目描述 (可选):",
-    defaultValue: "",
-    placeholder: "输入项目描述或直接回车跳过",
-  });
-  if (p.isCancel(description)) process.exit(0);
-
-  const author = await p.text({
-    message: "作者 (可选):",
-    defaultValue: getGitUser(),
-    placeholder: getGitUser() || "输入作者名",
-  });
-  if (p.isCancel(author)) process.exit(0);
-
-  return {
-    initGit,
-    installDeps,
-    packageManager,
-    description,
-    author,
-  };
-}
-
-// ── Confirm ────────────────────────────────────────────────────────────
-
-async function confirmCreation(
-  projectName: string,
-  template: SelectedTemplate,
-  config: ProjectConfig,
-  trimSelection?: TrimSelection,
-): Promise<void> {
-  const lines = [
-    `${chalk.dim("项目名称:")} ${chalk.cyan(projectName)}`,
-    `${chalk.dim("选择模板:")} ${chalk.cyan(template.name)}`,
-    `${chalk.dim("模板描述:")} ${template.description}`,
-    `${chalk.dim("包含功能:")} ${template.features.join(", ") || "自定义模板"}`,
-  ];
-
-  if (template.status === "beta") {
-    lines.push(`${chalk.dim("成熟状态:")} ${chalk.magenta("Beta")}`);
-  }
-  if (template.runtime?.node || template.runtime?.packageManager) {
-    lines.push(
-      `${chalk.dim("运行要求:")} Node ${template.runtime.node || "默认"} / ${template.runtime.packageManager || config.packageManager}`,
-    );
-  }
-
-  if (trimSelection) {
-    lines.push(
-      `${chalk.dim("模板配置:")} ${chalk.cyan(getTrimSummary(trimSelection))}`,
-    );
-  }
-
-  lines.push(
-    config.description ? `${chalk.dim("项目描述:")} ${config.description}` : "",
-    config.author ? `${chalk.dim("作    者:")} ${config.author}` : "",
-    `${chalk.dim("初始化Git:")} ${config.initGit ? chalk.green("是") : "否"}`,
-    `${chalk.dim("安装依赖:")} ${config.installDeps ? chalk.green("是") + ` (${config.packageManager})` : "否"}`,
-    `${chalk.dim("源码仓库:")} ${template.repoUrl}`,
-  );
-
-  p.note(lines.filter(Boolean).join("\n"), "项目创建信息确认");
-
-  const confirmed = await p.confirm({
-    message: "确认创建项目?",
-    initialValue: true,
-  });
-
-  if (p.isCancel(confirmed) || !confirmed) {
-    p.outro(chalk.yellow("取消创建"));
-    process.exit(0);
-  }
-}
-
-// ── Execute Creation ─────────────────────────────────────────────
-
-async function executeCreation(
-  projectName: string,
-  template: SelectedTemplate,
-  config: ProjectConfig,
-  options: CreateOptions,
-  trimSelection?: TrimSelection,
-): Promise<void> {
-  if (!projectName) throw new Error(`项目名称无效: ${projectName}`);
-  if (!template?.name)
-    throw new Error(`模板数据无效: ${JSON.stringify(template)}`);
-
-  const spinner = ora({
-    text: "准备创建项目...",
-    spinner: "dots",
-    color: "cyan",
-  }).start();
-  const projectPath = path.resolve(projectName);
-  let templatePath: string | undefined;
-  let cleanupPath: string | undefined;
-  let backupPath: string | undefined;
-  let overwriteExisting = false;
-  let dependenciesInstalled: boolean | null = config.installDeps ? false : null;
-  let gitInitialized = false;
-
+  p.intro(chalk.bgCyan.black(options.dryRun ? " 创建预览 " : " 创建 Robot 项目 "));
   try {
-    // 1. Check directory
-    spinner.text = "检查项目目录...";
-
-    if (fs.existsSync(projectPath)) {
-      spinner.stop();
-      p.log.warn("项目目录已存在");
-
-      const overwrite = await p.confirm({
-        message: "目录已存在，是否覆盖?",
-        initialValue: false,
-      });
-
-      if (p.isCancel(overwrite) || !overwrite) {
-        p.outro(chalk.yellow("取消创建"));
-        return;
-      }
-      overwriteExisting = true;
-      spinner.start("保留现有目录，先下载并验证模板...");
+    step(1, "选择项目与用途");
+    const template = options.from ? customTemplate(options.from) : await selectTemplate(options);
+    assertTemplateRuntime(template);
+    const name = await handleProjectName(projectName, template, options);
+    let selection: TrimSelection | undefined;
+    if (isTrimmableTemplate(template)) {
+      selection = options.preset && options.preset !== "custom"
+        ? getPresetSelection(options.preset)
+        : options.yes ? getPresetSelection("lite") : await selectTrimMode();
+    } else if (options.preset && options.preset !== "full") {
+      throw new Error(`${template.name} 暂不支持 ${options.preset} 预设，请移除 --preset。`);
     }
-
-    // 2. Download template
-    spinner.text = "下载最新模板...";
-    try {
-      const downloaded = await downloadTemplate(template, {
-        spinner,
-        noCache: options.noCache,
-      });
-      templatePath = downloaded.path;
-      cleanupPath = downloaded.cleanupPath;
-      if (!templatePath || !fs.existsSync(templatePath))
-        throw new Error(`模板路径无效: ${templatePath}`);
-    } catch (error) {
-      spinner.fail("模板下载失败");
-      throw error;
+    step(2, "设置产品与初始化方式");
+    const config = await configureProject(name, options, template);
+    step(3, options.dryRun ? "核对创建预览" : "核对并创建");
+    showCreationPlan(name, template, config, options, selection);
+    if (options.dryRun) {
+      p.outro("预览完成，未下载模板或写入项目。移除 --dry-run 后即可创建。");
+      return false;
     }
-
-    if (overwriteExisting) {
-      backupPath = path.join(
-        path.dirname(projectPath),
-        `.${path.basename(projectPath)}.robot-backup-${randomUUID()}`,
-      );
-      spinner.text = "备份现有项目目录...";
-      await fs.move(projectPath, backupPath);
+    if (!options.yes && !answer(await p.confirm({ message: "按以上设置创建项目？", initialValue: true }))) {
+      throw new CreationCancelled();
     }
-
-    // 3. Copy template
-    if (!templatePath) throw new Error("模板路径未初始化");
-    await copyTemplate(templatePath, projectPath, spinner);
-
-    // 3.5. Execute trimming (if applicable)
-    if (trimSelection && trimSelection.mode !== "full") {
-      spinner.text = "执行模板裁剪...";
-      await executeTrimming(projectPath, trimSelection, spinner);
-    }
-
-    // 4. Process config
-    spinner.text = "处理项目配置...";
-    await processProjectConfig(projectPath, projectName, template, config);
-
-    // 4.5. Validate and run a template-owned initializer when declared.
-    if (template.initializer) {
-      await runTemplateInitializer(
-        projectPath,
-        projectName,
-        template,
-        config,
-        spinner,
-      );
-    }
-
-    // 5. Git init
-    if (config.initGit) {
-      spinner.text = "初始化 Git 仓库...";
-      gitInitialized = initializeGitRepository(projectPath);
-    }
-
-    // 6. Install dependencies
-    if (config.installDeps) {
-      spinner.text = `使用 ${config.packageManager} 安装依赖...`;
-      dependenciesInstalled = await installDependencies(
-        projectPath,
-        spinner,
-        config.packageManager,
-      );
-    }
-
-    // 7. Clean up temp
-    if (cleanupPath) {
-      spinner.text = "清理临时文件...";
-      await fs.remove(cleanupPath).catch(() => {});
-      cleanupPath = undefined;
-    }
-    if (backupPath) {
-      await fs.remove(backupPath);
-      backupPath = undefined;
-    }
-
-    // 8. Done!
-    spinner.succeed(chalk.green("项目创建成功!"));
-
-    const pm = config.packageManager || "bun";
-    const cmd = getStartCommand(template, pm);
-    const steps = [`cd ${projectName}`];
-    if (dependenciesInstalled !== true) steps.push(`${pm} install`);
-    if (cmd) steps.push(cmd);
-
-    p.note(
-      [
-        `${chalk.dim("位置:")}   ${chalk.cyan(projectPath)}`,
-        `${chalk.dim("模板:")}   ${chalk.cyan(template.name)}`,
-        `${chalk.dim("Git:")}    ${gitInitialized ? chalk.green("已初始化并提交") : config.initGit ? chalk.yellow("初始化未完成") : "未初始化"}`,
-        `${chalk.dim("依赖:")}   ${dependenciesInstalled === true ? chalk.green("已完成") : dependenciesInstalled === false ? chalk.yellow("自动安装失败") : "已跳过"}`,
-        "",
-        chalk.bold("快速开始:"),
-        ...steps.map((s) => `  ${chalk.cyan(s)}`),
-      ].join("\n"),
-      "项目创建完成",
-    );
-
-    // Stats
-    const statsSpinner = ora("统计项目信息...").start();
-    const stats = await generateProjectStats(projectPath);
-    statsSpinner.stop();
-    if (stats) {
-      printProjectStats(stats);
-      console.log();
-    }
-
-    p.outro(chalk.green("Happy coding!"));
+    return await executeCreation(name, template, config, options, selection);
   } catch (error) {
-    if (cleanupPath) await fs.remove(cleanupPath).catch(() => {});
-    if (backupPath && (await fs.pathExists(backupPath))) {
-      try {
-        await fs.remove(projectPath).catch(() => {});
-        await fs.move(backupPath, projectPath);
-        backupPath = undefined;
-        p.log.warn("创建失败，原项目目录已恢复");
-      } catch (restoreError) {
-        throw new Error(
-          `${(error as Error).message}\n原目录恢复失败，备份保留在: ${backupPath}\n${(restoreError as Error).message}`,
-        );
-      }
+    if (error instanceof CreationCancelled) {
+      p.outro("已取消创建。");
+      return false;
     }
-    if (spinner.isSpinning) spinner.fail("创建项目失败");
     throw error;
   }
 }
 
-// ── Post-creation helpers ────────────────────────────────────────
+function customTemplate(source: string): SelectedTemplate {
+  const repoUrl = source.trim();
+  if (!/^(https?:\/\/|ssh:\/\/|git@)/.test(repoUrl)) {
+    throw new Error("请提供有效的 Git 仓库地址，例如 https://github.com/org/repo 或 git@github.com:org/repo.git。");
+  }
+  return {
+    key: "custom", name: "自定义 Git 模板", description: "按仓库自身的文档与运行约定初始化",
+    repoUrl, features: [], version: "full",
+  };
+}
 
-async function processProjectConfig(
-  projectPath: string,
-  projectName: string,
-  template: SelectedTemplate,
-  config: ProjectConfig,
-): Promise<void> {
-  // package.json
+async function selectTemplate(options: CreateOptions): Promise<SelectedTemplate> {
+  const all = getAllTemplates();
+  if (options.template) {
+    const template = all[options.template];
+    if (!template) throw new Error(`模板「${options.template}」不存在。运行 robot list 查看可用模板，或用 --from 指定仓库。`);
+    if (template.status === "coming-soon") throw new Error(`模板「${options.template}」尚未上线。运行 robot list 查看当前可用模板。`);
+    return { key: options.template, ...template };
+  }
+  if (options.yes) return { key: "robot-admin", ...all["robot-admin"] };
+  const available = Object.entries(all).filter(([, template]) => template.status !== "coming-soon");
+  if (options.advanced) return selectAdvancedTemplate(available);
+  const selected = answer(await p.select({
+    message: "你要创建哪类项目？",
+    options: [
+      { value: "robot-admin", label: "PC 管理后台", hint: "Vue · Naive UI · 登录、权限与业务组件" },
+      { value: "robot-h5", label: "移动 H5 / 企业 WebView", hint: "Beta · Vant · 含 wl-mbase 集成配置" },
+      { value: "advanced", label: "更多架构", hint: "Monorepo、微前端、模块联邦" },
+    ], initialValue: "robot-admin",
+  }));
+  if (selected === "advanced") return selectAdvancedTemplate(available);
+  return { key: selected, ...all[selected] };
+}
+
+async function selectAdvancedTemplate(available: [string, TemplateConfig][]): Promise<SelectedTemplate> {
+  const selected = answer(await p.select({
+    message: "选择项目架构",
+    options: available.map(([key, template]) => ({
+      value: key, label: template.name.replace(/\s*完整版$/, ""),
+      hint: `${template.status === "beta" ? "Beta · " : ""}${template.description}`,
+    })),
+  }));
+  return { key: selected, ...available.find(([key]) => key === selected)![1] };
+}
+
+async function handleProjectName(name: string | undefined, template: SelectedTemplate, options: CreateOptions): Promise<string> {
+  const defaultName = template.key === "robot-h5" ? "my-mobile-app" : "my-admin-app";
+  const candidate = name?.trim();
+  if (candidate) {
+    const result = validateProjectName(candidate);
+    if (result.valid) return candidate;
+    if (options.yes) throw new Error(`项目目录无效：${result.errors.join("；")}`);
+    p.log.warn(result.errors.join("；"));
+  }
+  return answer(await p.text({
+    message: "项目目录",
+    placeholder: defaultName,
+    defaultValue: defaultName,
+    validate: (input) => validateProjectName(input?.trim() || defaultName).errors[0],
+  })).trim();
+}
+
+async function configureProject(name: string, options: CreateOptions, template: SelectedTemplate): Promise<ProjectConfig> {
+  const title = options.title?.trim() || (options.yes ? name : answer(await p.text({
+    message: "产品名称（用于应用标题）", placeholder: name, defaultValue: name,
+  })).trim());
+  if (Array.from(title).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
+    throw new Error("产品名称请使用单行文字，不要包含换行或控制字符。");
+  }
+  const required = getRequiredPackageManager(template);
+  if (required && options.packageManager && options.packageManager !== required) {
+    throw new Error(`${template.name} 使用 ${required}，不能选择 ${options.packageManager}。请移除 --package-manager 或指定 ${required}。`);
+  }
+  const available = detectPackageManager();
+  let packageManager: PackageManager = required || options.packageManager || available[0] || "npm";
+  let initGit = options.git !== false;
+  let installDeps = !options.skipInstall;
+  let description = options.description?.trim() || "";
+  let author = options.author?.trim() ?? getGitUser();
+  if (!options.yes) {
+    p.log.info(required
+      ? `模板使用 ${required}${template.runtime?.packageManagerVersion ? ` ${template.runtime.packageManagerVersion}` : ""}，已自动匹配。`
+      : `默认使用 ${packageManager} 安装依赖。`);
+    const mode = answer(await p.select({
+      message: "如何完成初始化？",
+      options: [
+        { value: "quick", label: "使用默认设置", hint: `${installDeps ? `${packageManager} 安装依赖` : "跳过安装"} · ${initGit ? "Git main 分支" : "不初始化 Git"}` },
+        { value: "files", label: "先生成项目文件", hint: "跳过依赖安装，稍后按指引启动" },
+        { value: "custom", label: "调整初始化设置", hint: "安装方式、Git、描述与作者" },
+      ], initialValue: "quick",
+    }));
+    if (mode === "files") installDeps = false;
+    if (mode === "custom") {
+      if (!options.skipInstall) installDeps = answer(await p.confirm({ message: "现在安装依赖？", initialValue: true }));
+      if (!required && !options.packageManager) packageManager = answer(await p.select({
+        message: "包管理器", options: available.map((manager) => ({ value: manager, label: manager })), initialValue: packageManager,
+      }));
+      if (options.git !== false) initGit = answer(await p.confirm({ message: "初始化 Git main 分支并创建首次提交？", initialValue: true }));
+      description = options.description ?? answer(await p.text({ message: "项目描述（可选）", placeholder: "回车跳过", defaultValue: description }));
+      author = options.author ?? answer(await p.text({ message: "作者（可选）", placeholder: "回车使用 Git 用户名", defaultValue: author }));
+    }
+  }
+  const config = { title, initGit, installDeps, packageManager, description, author };
+  checkInstallAvailability(template, config);
+  return config;
+}
+
+/** Missing tools leave usable files and an explicit next step. */
+function checkInstallAvailability(template: SelectedTemplate, config: ProjectConfig): void {
+  const required = getRequiredPackageManager(template);
+  if (required && required !== config.packageManager) {
+    p.log.info(`已按下载后的模板要求改用 ${required}。`);
+    config.packageManager = required;
+  }
+  if (!config.installDeps) return;
+  const version = getPackageManagerVersion(config.packageManager);
+  const range = required ? template.runtime?.packageManagerVersion : undefined;
+  if (!version || !isVersionSupported(version, range)) {
+    p.log.warn(`${config.packageManager}${version ? ` ${version}` : " 未安装"}${range ? `，模板要求 ${range}` : ""}。将先生成文件，完成页会提供安装指引。`);
+    config.installDeps = false;
+  }
+}
+
+function showCreationPlan(name: string, template: SelectedTemplate, config: ProjectConfig, options: CreateOptions, selection?: TrimSelection): void {
+  const lines = [
+    `产品名称  ${config.title}`,
+    `项目目录  ${path.resolve(name)}`,
+    `项目模板  ${template.name}${template.status === "beta" ? " · Beta" : ""}`,
+    selection ? `用途预设  ${getTrimSummary(selection)}` : "",
+    `运行要求  Node ${template.runtime?.node || "以下载后的 package.json 为准"}`,
+    `包管理器  ${config.packageManager}${template.runtime?.packageManagerVersion ? ` ${template.runtime.packageManagerVersion}` : ""}`,
+    `初始化    ${config.initGit ? "Git main 分支" : "不初始化 Git"} · ${config.installDeps ? "安装依赖" : "跳过依赖安装"}`,
+    `模板来源  ${template.repoUrl}${template.branch ? ` #${template.branch}` : ""}`,
+    `缓存策略  ${options.noCache ? "重新下载，忽略缓存" : "优先有效缓存，过期后刷新"}`,
+  ].filter(Boolean);
+  p.note(lines.join("\n"), options.dryRun ? "创建计划 · 预览" : "创建计划");
+  const guidance = getProjectGuidance(template, config);
+  if (guidance.length) p.note(guidance.join("\n"), "开始前了解");
+  if (options.dryRun) p.log.info("执行时会读取下载后的真实运行契约；版本不兼容会在写入项目之前停止。");
+}
+
+async function executeCreation(name: string, selectedTemplate: SelectedTemplate, config: ProjectConfig, options: CreateOptions, selection?: TrimSelection): Promise<boolean> {
+  const projectPath = path.resolve(name);
+  const spinner = ora({ text: "准备项目…", color: "cyan" }).start();
+  const controller = new AbortController();
+  const onInterrupt = () => controller.abort(new Error("已取消创建"));
+  const checkCancelled = () => { if (controller.signal.aborted) throw new CreationCancelled(); };
+  process.once("SIGINT", onInterrupt);
+  let downloaded: DownloadedTemplate | undefined;
+  let backupPath: string | undefined;
+  let projectCreated = false;
+  let generationComplete = false;
+  let template = selectedTemplate;
+  try {
+    if (await fs.pathExists(projectPath)) {
+      spinner.stop();
+      if (options.yes) throw new Error(`目录已存在：${projectPath}。--yes 不会覆盖已有文件，请使用新目录或交互式创建。`);
+      p.log.warn(`目录已存在：${projectPath}`);
+      const overwrite = answer(await p.confirm({ message: "备份现有目录后，用新项目替换？创建失败将自动恢复。", initialValue: false }));
+      if (!overwrite) throw new CreationCancelled();
+      backupPath = path.join(path.dirname(projectPath), `.${name.slice(0, 80)}.robot-backup-${randomUUID()}`);
+      spinner.start("先下载并校验模板，现有目录暂不改动…");
+    }
+    downloaded = await downloadTemplate(template, { spinner, noCache: options.noCache, signal: controller.signal });
+    template = await resolveDownloadedTemplateRuntime(downloaded.path, template);
+    checkInstallAvailability(template, config);
+    checkCancelled();
+    if (backupPath) await fs.move(projectPath, backupPath);
+    // Claim an empty directory atomically; a concurrently created path is never ours to delete.
+    await fs.mkdir(projectPath);
+    projectCreated = true;
+    spinner.text = "复制项目与团队配置…";
+    await copyTemplate(downloaded.path, projectPath, spinner);
+    checkCancelled();
+    if (selection && selection.mode !== "full") await executeTrimming(projectPath, selection, spinner);
+    checkCancelled();
+    spinner.text = "写入产品名称与项目配置…";
+    await processProjectConfig(projectPath, name, template, config);
+    checkCancelled();
+    if (template.initializer) await runTemplateInitializer(projectPath, name, template, config, spinner, controller.signal);
+    checkCancelled();
+    await writeProjectGuide(projectPath, name, template, config, downloaded, selection);
+    checkCancelled();
+    let gitInitialized = false;
+    if (config.initGit) {
+      spinner.text = "初始化 Git main 分支…";
+      gitInitialized = initializeGitRepository(projectPath);
+    }
+    checkCancelled();
+    generationComplete = true;
+    // Dependency installation is recoverable: preserve a fully generated project.
+    let installed: boolean | null = null;
+    if (config.installDeps) {
+      spinner.stop();
+      p.log.step(`安装依赖 · ${config.packageManager} install`);
+      installed = await installDependencies(projectPath, undefined, config.packageManager, controller.signal);
+      spinner.start("整理启动指引…");
+    }
+    if (backupPath) {
+      const completedBackup = backupPath;
+      backupPath = undefined;
+      if (installed === false) {
+        p.log.warn(`新项目已保留，原目录备份位于 ${completedBackup}。确认安装成功后可手动删除备份。`);
+      } else {
+        await fs.remove(completedBackup).catch(() => p.log.warn(`旧目录备份保留在 ${completedBackup}，可在确认新项目后手动删除。`));
+      }
+    }
+    spinner.succeed(installed === false ? "项目文件已生成，依赖安装需要重试" : "项目文件已准备好");
+    const start = await getProjectStartCommand(projectPath, template, config.packageManager);
+    p.note([
+      `cd ${name}`, ...(installed === true ? [] : [`${config.packageManager} install`]),
+      start || "按 README 与 package.json 选择项目运行方式（未声明 dev/start）。",
+    ].join("\n"), "下一步 · 启动项目");
+    p.note([
+      `目录  ${projectPath}`,
+      `来源  ${downloaded.source || template.repoUrl}${downloaded.fromCache ? " · 缓存" : ""}`,
+      `提交  ${downloaded.revision ? downloaded.revision.slice(0, 12) : "未提供（归档下载或旧缓存）"}`,
+      `Git   ${gitInitialized ? "main 分支，已创建首次提交" : config.initGit ? "首次提交未完成，请检查 Git 身份配置" : "未初始化"}`,
+      `依赖  ${installed === true ? "安装完成" : installed === false ? "安装失败，项目文件已保留" : "未安装"}`,
+      "指引  ROBOT_PROJECT.md · 项目配置、检查命令与接入事项",
+      "状态  已生成项目文件，尚未验证正式接口与部署环境",
+    ].join("\n"), "创建结果");
+    const guidance = getProjectGuidance(template, config);
+    if (guidance.length) p.note(guidance.join("\n"), "首次运行提示");
+    if (installed === false) process.exitCode = 1;
+    p.outro(installed === false ? "按上方命令重试安装后即可继续。" : "准备就绪，从第一条启动命令开始。");
+    return installed !== false;
+  } catch (error) {
+    if (projectCreated && !generationComplete) await fs.remove(projectPath).catch(() => {});
+    if (backupPath && generationComplete) {
+      p.log.warn(`项目文件已保留在 ${projectPath}，原目录备份位于 ${backupPath}。`);
+    } else if (backupPath && await fs.pathExists(backupPath)) {
+      try {
+        await fs.move(backupPath, projectPath);
+        p.log.warn("创建未完成，原目录已恢复。");
+      } catch (restoreError) {
+        throw new Error(`${(error as Error).message}\n原目录恢复失败，备份保留在：${backupPath}\n${(restoreError as Error).message}`);
+      }
+    }
+    if (spinner.isSpinning) spinner.stop();
+    if (controller.signal.aborted) throw new CreationCancelled();
+    throw error;
+  } finally {
+    process.removeListener("SIGINT", onInterrupt);
+    if (downloaded?.cleanupPath) await fs.remove(downloaded.cleanupPath).catch(() => {});
+  }
+}
+
+async function processProjectConfig(projectPath: string, name: string, template: SelectedTemplate, config: ProjectConfig): Promise<void> {
   const pkgPath = path.join(projectPath, "package.json");
-  if (fs.existsSync(pkgPath)) {
-    const pkg = await fs.readJson(pkgPath);
-    pkg.name = projectName;
-    pkg.description = config.description || `基于 ${template.name} 创建的项目`;
-    if (config.author) pkg.author = config.author;
-    await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+  const pkg = await fs.readJson(pkgPath);
+  pkg.name = name;
+  pkg.description = config.description || `基于 ${template.name} 创建的项目`;
+  if (config.author) pkg.author = config.author;
+  else delete pkg.author;
+  delete pkg.repository;
+  delete pkg.bugs;
+  delete pkg.homepage;
+  await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+  for (const [from, to] of [["_gitignore", ".gitignore"], ["_env.example", ".env.example"]]) {
+    const source = path.join(projectPath, from);
+    if (await fs.pathExists(source)) await fs.move(source, path.join(projectPath, to), { overwrite: false });
   }
-
-  // README.md
-  const readmePath = path.join(projectPath, "README.md");
-  if (fs.existsSync(readmePath)) {
-    let readme = await fs.readFile(readmePath, "utf8");
-    readme = readme.replace(/# .+/, `# ${projectName}`);
-    const desc = config.description || `基于 ${template.name} 创建的项目`;
-    readme = readme.replace(/项目描述.*/, desc);
-    if (config.author) readme += `\n\n## 作者\n\n${config.author}\n`;
-    await fs.writeFile(readmePath, readme);
-  }
-
-  // Rename dotfiles
-  for (const [from, to] of [
-    ["_gitignore", ".gitignore"],
-    ["_env.example", ".env.example"],
-  ]) {
-    const src = path.join(projectPath, from);
-    const dest = path.join(projectPath, to);
-    if (fs.existsSync(src)) await fs.move(src, dest);
+  if (template.key === "robot-admin" && config.title) {
+    const envPath = path.join(projectPath, "envs/.env");
+    if (await fs.pathExists(envPath)) {
+      const env = await fs.readFile(envPath, "utf8");
+      const title = JSON.stringify(config.title).replace(/\$/g, "\\$");
+      await fs.writeFile(envPath, env.replace(/^VITE_APP_TITLE\s*=.*$/m, () => `VITE_APP_TITLE=${title}`));
+    }
   }
 }
 
 function initializeGitRepository(projectPath: string): boolean {
   try {
-    execFileSync("git", ["--version"], { stdio: "ignore" });
-    execFileSync("git", ["init"], { cwd: projectPath, stdio: "ignore" });
-    execFileSync("git", ["add", "."], { cwd: projectPath, stdio: "ignore" });
-    execFileSync("git", ["commit", "-m", "feat: 初始化项目"], {
-      cwd: projectPath,
-      stdio: "ignore",
-    });
+    execFileSync("git", ["init", "-b", "main"], { cwd: projectPath, stdio: "ignore", timeout: 10_000 });
+    execFileSync("git", ["add", "."], { cwd: projectPath, stdio: "ignore", timeout: 30_000 });
+    execFileSync("git", ["commit", "-m", "feat: 初始化项目"], { cwd: projectPath, stdio: "ignore", timeout: 30_000 });
     return true;
   } catch {
-    console.log(chalk.yellow("Git 初始化或首次提交失败，请稍后手动检查"));
     return false;
   }
-}
-
-function getStartCommand(template: SelectedTemplate, pm: string): string {
-  const script = template.startScript || START_COMMAND_MAP[template.key] || "dev";
-  return `${pm} run ${script}`;
 }
